@@ -1,4 +1,4 @@
-#!/home/cytech/Desktop/Perso/WebPilot/.venv/bin/python3
+#!/home/cytech/Desktop/Perso/WebPilot/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

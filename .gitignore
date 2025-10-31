@@ -1,5 +1,12 @@
+# Environnements virtuels
 .venv/
-pycache/
+__pycache__/
 *.pyc
+
+# Fichiers Playwright
 playwright-report/
 *.png
+
+# pyenv
+.python-version
+.pyenv/

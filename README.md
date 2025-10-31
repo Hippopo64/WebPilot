@@ -4,7 +4,7 @@ Petit projet d’automatisation web (Playwright) pour ouvrir une page, faire un 
 et récupérer des liens. Dev Linux + VS Code.
 
 ## Prérequis
-- Python 3.8+
+- Python 3.10+
 - venv activé: `source .venv/bin/activate`
 
 ## Installation
