@@ -10,3 +10,4 @@ playwright-report/
 # pyenv
 .python-version
 .pyenv/
+.venv/
