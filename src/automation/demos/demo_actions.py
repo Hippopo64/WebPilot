@@ -24,7 +24,7 @@ def run():
         print("[4] screenshot:", screenshot(page, path="wikipedia_results.png", full=True))
         
         # 6. On va sur une nouvelle page pour extraire les liens
-        print("[5] extract_links:", extract_links(page, "https://en.wikipedia.org/wiki/Playwright", contains="Playwright")["links_sample"])
+        print("[5] extract_links:", extract_links(page, contains="Playwright")["links_sample"])
 
     except Exception as e:
         print(f"UNE ERREUR S'EST PRODUITE: {e}")
