@@ -1,15 +1,16 @@
+
 # DECISIONS.md
 
-Ce document présente les **décisions techniques** prises lors du développement du projet **WebPilot MCP**, réalisé dans le cadre du test technique pour le poste de Développeur Full-Stack IA chez TW3 Partners.  
+Ce document présente les **décisions techniques** prises lors du développement du projet **WebPilot **, réalisé dans le cadre du test technique pour le poste de Développeur Full-Stack IA chez TW3 Partners.  
 Il explique les choix d’architecture, les raisons derrière certaines implémentations, ainsi que les pistes d’amélioration envisagées.
 
 ---
 
 ## 🎯 1. Objectif du projet
 
-L’objectif du projet est de concevoir un **serveur MCP (Model Context Protocol)** permettant d’exposer plusieurs outils d’automatisation de navigateur via **Playwright**.  
+L’objectif du projet est de concevoir un **serveur MCP (Model Context Protocol)** permettant d’exposer plusieurs outils d’automatisation de navigateur.  
 Ces outils permettent à une IA ou à un utilisateur d’interagir avec une page web : navigation, clics, remplissage de champs, extraction de liens ou captures d’écran.  
-Le tout repose sur **FastMCP**, et communique via le protocole **stdio** pour faciliter les tests locaux et l’intégration dans des environnements compatibles MCP.
+Le tout repose sur le **SDK officiel du MCP**, et communique via le protocole **stdio** pour faciliter les tests locaux et l’intégration dans des environnements compatibles MCP.
 
 ---
 
@@ -17,19 +18,15 @@ Le tout repose sur **FastMCP**, et communique via le protocole **stdio** pour fa
 
 Le projet est organisé de manière modulaire afin de séparer clairement la logique serveur, les outils et la gestion du navigateur.
 
-**Structure du code :**
-
-src/
-└── webpilot/
-├── browser.py → Gestion du navigateur Playwright (lancement, arrêt, singleton)
-├── tools.py → Fonctions des outils (navigate, click, fill, etc.)
-├── server.py → Serveur MCP exposant les tools via FastMCP
-└── demos/
-└── demo_scenario.py → Script de démonstration automatisé
+**Différents fichiers :**
+browser.py → Gestion du navigateur Playwright (lancement, arrêt)
+tools.py → Fonctions des outils (navigate, click, fill, etc.)
+server.py → Serveur MCP exposant les tools via FastMCP
+demo_scenario.py → Script de démonstration automatisé
 
 
 **Raisons de cette organisation :**
-- `browser.py` : centralise la création du navigateur pour éviter plusieurs instances et réduire le temps de lancement.  
+- `browser.py` : propose des fonctions pour lancer et ferme un navigateur, afin de permettre une continuité entre les étapes 
 - `tools.py` : regroupe les fonctions principales du projet (navigate, screenshot, extract_links, etc.), rendant le code plus clair et plus testable.  
 - `server.py` : gère uniquement la partie serveur MCP, l’enregistrement des outils et le logging.  
 - `demo_scenario.py` : sert de preuve de fonctionnement et de test automatisé du parcours complet.
@@ -43,11 +40,11 @@ Cette architecture permet d’avoir un projet lisible, extensible et facilement 
 ### Utilisation de `uv`
 Le projet utilise **uv** comme gestionnaire de dépendances et d’exécution.  
 Ce choix a été fait car :
-- `uv` est rapide et moderne, recommandé pour les projets Python récents.  
+- `uv` est rapide et moderne, et recommandé par la documentation officielle de MCP.  
 - Il simplifie la gestion de l’environnement virtuel et des dépendances sans avoir à utiliser `pip` ou `venv`.  
 - Il permet d’exécuter directement le serveur MCP avec une commande claire :  
   `uv run mcp dev src/webpilot/server.py`  
-  Cette interface de développement intégrée est pratique pour tester les outils et visualiser leurs résultats sans déploiement supplémentaire.
+  Et propose une interface de développement intégrée très pratique pour tester les outils et visualiser leurs résultats sans déploiement supplémentaire sur un localhost.
 
 ---
 
@@ -91,7 +88,7 @@ Chaque fonction suit les mêmes principes :
 
 ---
 
-### Exemple du choix d’implémentation de `click`
+### Choix d’implémentation de `click`
 L’outil `click` a été conçu pour gérer deux cas possibles :
 1. Le clic provoque une navigation (par exemple un lien).  
 2. Le clic agit sur la page sans navigation (par exemple un bouton JS).  
@@ -119,10 +116,8 @@ Cela permet de distinguer les retours “machine” des retours “humains”.
 | Problème | Solution |
 |-----------|-----------|
 | Erreur “Playwright Sync API inside asyncio loop” | Passage complet à `async_playwright` et réécriture des outils avec `await`. |
-| “coroutine not awaited” | Ajout systématique d’`await` dans les appels à `start_browser()` et aux fonctions asynchrones. |
 | Problèmes de structure avec le packaging `uv` | Réorganisation du code dans `src/webpilot` et création du `pyproject.toml`. |
-| Erreurs de construction du package (Hatchling) | Ajout de la section `tool.hatch.build.targets.wheel` pour définir les fichiers à inclure. |
-| Multiplication d’instances du navigateur | Mise en place d’un singleton global dans `browser.py` pour réutiliser le même onglet. |
+| Multiplication d’instances du navigateur | Mise en place d’un singleton global dans `server.py` pour réutiliser le même onglet. |
 
 ---
 
@@ -138,4 +133,4 @@ Cela permet de distinguer les retours “machine” des retours “humains”.
 ---
 
 **Auteur :** Hippolyte Dupont  
-**Date :** Novembre 2025
+**Date :** Novembre 2025# DECISIONS.md
