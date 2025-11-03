@@ -1,0 +1,23 @@
+[project]
+name = "webpilot"
+version = "0.1.0"
+description = "MCP server (SSE/HTTP) exposing Playwright tools"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Hippolyte Dupont" }]
+
+dependencies = [
+  "playwright>=1.47",
+  "mcp>=1.7",         # SDK MCP Python
+  "starlette>=0.38",  # pour monter l'app SSE/HTTP
+  "uvicorn>=0.30",    # serveur ASGI
+]
+
+[project.scripts]
+# Entrées pratiques :
+webpilot-sse = "webpilot.server_sse:main"
+webpilot-http = "webpilot.server_http:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
