@@ -1,4 +1,4 @@
-from automation.tools import navigate, screenshot, extract_links
+from webpilot.tools import navigate, screenshot, extract_links
 
 def run():
     print("[1] navigate:", navigate("https://example.com"))

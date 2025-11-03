@@ -1,6 +1,6 @@
 # AJOUTÉ : On importe les fonctions pour gérer le navigateur
-from automation.tools import  navigate, click, fill, screenshot, extract_links
-from automation.browser import start_browser, stop_browser
+from webpilot.tools import  navigate, click, fill, screenshot, extract_links
+from webpilot.browser import start_browser, stop_browser
 
 def run():
     # On initialise les variables pour le bloc finally
