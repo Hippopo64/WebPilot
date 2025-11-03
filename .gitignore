@@ -11,5 +11,7 @@ playwright-report/
 .python-version
 .pyenv/
 .venv/
+
+.vscode/
 tests/
 demo_outputs/
