@@ -1,26 +1,158 @@
-# server.py
-from mcp.server.fastmcp import FastMCP
+# src/webpilot/server.py
 import sys
 import logging
+from logging import StreamHandler
+from typing import Optional
+import asyncio
 
-logging.basicConfig(level=logging.INFO, stream=sys.stderr)
-mcp = FastMCP("DemoServer")
+from mcp.server.fastmcp import FastMCP
+
+# Tes modules
+from webpilot.browser import start_browser, stop_browser
+from webpilot import tools as T
+
+# ------------- Logging (recommandé par MCP) : vers STDERR -------------
+logger = logging.getLogger("webpilot.fastmcp")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(StreamHandler(sys.stderr))
+
+# ------------- État navigateur partagé (1 browser / 1 page) -------------
+P = BROWSER = PAGE = None
+
+async def ensure_page():
+    """Démarre Playwright une fois et réutilise la même page ensuite."""
+    global P, BROWSER, PAGE
+    if PAGE is None:
+        P, BROWSER, PAGE = await start_browser()
+        logger.info("browser_started")
+    return PAGE
+
+async def shutdown():
+    """Arrêt propre quand le serveur se termine."""
+    global P, BROWSER, PAGE
+    try:
+        await stop_browser(P, BROWSER)
+        logger.info("browser_stopped")
+    finally:
+        P = BROWSER = PAGE = None
+
+# ------------- Déclaration du serveur MCP (FastMCP) -------------
+mcp = FastMCP("webpilot-mcp")
 
 @mcp.tool()
-async def add(a: int, b: int) -> int:
-    """Add two numbers."""
-    logging.info(f"Appel de add({a}, {b})")
-    return a + b
+async def tool_navigate(url: str):
+    """
+    This tool navigates to the specified URL.
+    Args:
+        url (str): The URL to navigate to.
+    Returns:
+        dict: A dictionary containing the result of the navigation attempt.
+    """
+    page = await ensure_page()
+    res = await T.navigate(page, url)
+    logger.info(f"navigate ok={res.get('ok')} url={url}")
+    return res
 
-@mcp.resource("greeting://{name}")
-async def get_greeting(name: str) -> str:
-    """Return a greeting for a name."""
-    logging.info(f"Appel de get_greeting({name})")
-    return f"Hello, {name}!"
+@mcp.tool()
+async def tool_screenshot(path: Optional[str]=None, full: bool=False):
+    """
+    This tool takes a screenshot of the current page.
+    Args:
+        path (str, optional): The file path to save the screenshot to. Defaults to "snap.png".
+        full (bool): Whether to capture the full page or just the viewport.
+    Returns:
+        dict: A dictionary containing the result of the screenshot attempt.
+    """
+    page = await ensure_page()
+    res = await T.screenshot(page, path=path or "snap.png", full=full)
+    logger.info(f"screenshot ok={res.get('ok')} path={path} full={full}")
+    return res
+
+@mcp.tool()
+async def tool_extract_links(contains: Optional[str]=None):
+    """
+    This tool extracts all links from the current page, optionally filtering them by a substring.
+    Args:
+        contains (str, optional): A substring to filter links by. Defaults to None.
+    Returns:
+        dict: A dictionary containing the extracted links and related information.
+    """
+    page = await ensure_page()
+    res = await T.extract_links(page, contains)
+    logger.info(f"extract_links ok={res.get('ok')} count={res.get('count')}")
+    return res
+
+@mcp.tool()
+async def tool_fill(selector: str, text: str):
+    """
+    This tool fills a form field identified by a CSS selector with the provided text.
+    Args:
+        selector (str): The CSS selector of the form field to fill.
+        text (str): The text to fill into the form field.
+    Returns:
+        dict: A dictionary containing the result of the fill attempt.
+    """
+    page = await ensure_page()
+    res = await T.fill(page, selector, text)
+    logger.info(f"fill ok={res.get('ok')} selector={selector}")
+    return res
+
+@mcp.tool()
+async def tool_click(selector: str):
+    """
+    This tool clicks on a specified element on the page.
+    Args:
+        selector (str): The CSS selector of the element to click.
+    Returns:
+        dict: A dictionary containing the result of the click attempt.
+    """
+    page = await ensure_page()
+    res = await T.click(page, selector)
+    logger.info(f"click ok={res.get('ok')} selector={selector}")
+    return res
+
+@mcp.tool()
+async def tool_get_html(save_path: Optional[str]=None):
+    """
+    This tool retrieves the HTML content of the current page.
+    Args:
+        save_path (str, optional): The file path to save the HTML content to. Defaults to None.
+    Returns:
+        dict: A dictionary containing the HTML content and related information.
+    """
+    page = await ensure_page()
+    # Si T.get_html(page, save_path=...) existe, on l'utilise ; sinon on fallback.
+    try:
+        res = await T.get_html(page, save_path=save_path)
+    except TypeError:
+        res = await T.get_html(page)
+        if res.get("ok") and save_path:
+            html = await page.content()
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            res.setdefault("data", {})["saved_to"] = save_path
+            res["data"]["length"] = len(html)
+    logger.info(f"get_html ok={res.get('ok')} saved={bool(save_path)}")
+    return res
+
+# ------------- Points d'entrée -------------
+def main_stdio():
+    """Exécute le serveur en STDIO (utile hors dev)."""
+    try:
+        mcp.run_stdio()
+    finally:
+        asyncio.run(shutdown())
+
+# Pour `uv run mcp dev src/webpilot/server.py` :
+# Le CLI `mcp dev` importe ton module et attend que tu lui donnes un serveur FastMCP.
+# On expose simplement l'objet `mcp` + un hook `__getattr__` si nécessaire.
+def __getattr__(name: str):
+    # Certains wrappers recherchent `app`/`server`. On renvoie mcp dans ces cas.
+    if name in {"app", "server"}:
+        return mcp
+    raise AttributeError(name)
 
 if __name__ == "__main__":
-    logging.info("Démarrage du serveur 'DemoServer'...")
-    
-    # --- LA CORRECTION EST ICI ---
-    mcp.run(transport='stdio')
-    # --- FIN DE LA CORRECTION ---
+    # Lancement “direct” (facultatif) : uv run python -m webpilot.server
+    main_stdio()

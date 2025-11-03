@@ -1,14 +1,14 @@
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright, Playwright, Browser, Page
 
-def start_browser():
-    p = sync_playwright().start()
-    browser = p.chromium.launch(headless=True) 
-    page = browser.new_page()
-    page.set_viewport_size({"width": 1280, "height": 720})
+async def start_browser() -> tuple[Playwright, Browser, Page]:
+    p = await async_playwright().start()
+    browser = await p.chromium.launch(headless=True) 
+    page = await browser.new_page()
+    await page.set_viewport_size({"width": 1280, "height": 720})
     return p, browser, page
 
-def stop_browser(p, browser):
+async def stop_browser(p, browser):
     if browser:
-        browser.close()
+        await browser.close()
     if p:
-        p.stop()
+        await p.stop()
