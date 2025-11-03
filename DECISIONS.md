@@ -1,40 +1,141 @@
+# DECISIONS.md
+
+Ce document présente les **décisions techniques** prises lors du développement du projet **WebPilot MCP**, réalisé dans le cadre du test technique pour le poste de Développeur Full-Stack IA chez TW3 Partners.  
+Il explique les choix d’architecture, les raisons derrière certaines implémentations, ainsi que les pistes d’amélioration envisagées.
 
 ---
 
-## DECISIONS.md – version détaillée et professionnelle
+## 🎯 1. Objectif du projet
 
-```markdown
-# 📘 DECISIONS.md
-
-Ce document décrit les **choix techniques**, **compromis** et **enseignements** liés au développement du projet *WebPilot MCP*.
-
----
-
-## 🎯 Objectif du projet
-
-Créer un **serveur MCP (Model Context Protocol)** exposant des outils d’automatisation web simples mais représentatifs.  
-L’idée : permettre à un modèle d’intelligence artificielle d’interagir avec des pages web de manière contrôlée et reproductible (ouvrir une page, extraire des liens, cliquer, remplir un champ, etc.).
+L’objectif du projet est de concevoir un **serveur MCP (Model Context Protocol)** permettant d’exposer plusieurs outils d’automatisation de navigateur via **Playwright**.  
+Ces outils permettent à une IA ou à un utilisateur d’interagir avec une page web : navigation, clics, remplissage de champs, extraction de liens ou captures d’écran.  
+Le tout repose sur **FastMCP**, et communique via le protocole **stdio** pour faciliter les tests locaux et l’intégration dans des environnements compatibles MCP.
 
 ---
 
-## ⚙️ Architecture et choix principaux
+## 🧩 2. Architecture et organisation du code
 
-### 🧩 Utilisation de **FastMCP SDK**
-- Choisi pour sa compatibilité native avec les clients MCP modernes (OpenAI, Anthropic, etc.).
-- Permet d’enregistrer facilement des outils via des décorateurs `@mcp.tool()`.
-- Évite d’avoir à gérer un serveur HTTP complet (FastAPI/Flask) et se concentre sur la communication IA ↔ outils.
+Le projet est organisé de manière modulaire afin de séparer clairement la logique serveur, les outils et la gestion du navigateur.
 
-### ⚙️ API **asynchrone**
-- FastMCP repose sur **asyncio**, il fallait donc utiliser **Playwright.async_api** pour éviter les blocages.
-- Cela permet d’exécuter plusieurs actions sans bloquer la boucle d’événements.
-- Corrige l’erreur classique : “Playwright Sync API inside asyncio loop”.
+**Structure du code :**
 
-### 🌐 Navigateur partagé (pattern singleton)
-- Un seul navigateur et un seul onglet ouverts pour tous les outils.
-- Gain de performance et réduction de consommation mémoire.
-- Centralisé dans `browser.py` via des variables globales (`_P`, `_B`, `_PAGE`).
+src/
+└── webpilot/
+├── browser.py → Gestion du navigateur Playwright (lancement, arrêt, singleton)
+├── tools.py → Fonctions des outils (navigate, click, fill, etc.)
+├── server.py → Serveur MCP exposant les tools via FastMCP
+└── demos/
+└── demo_scenario.py → Script de démonstration automatisé
 
-### 📦 Format de réponse JSON standardisé
-Tous les outils suivent le même schéma :
-```json
-{ "ok": true, "tool": "navigate", "url": "...", "status": 200 }
+
+**Raisons de cette organisation :**
+- `browser.py` : centralise la création du navigateur pour éviter plusieurs instances et réduire le temps de lancement.  
+- `tools.py` : regroupe les fonctions principales du projet (navigate, screenshot, extract_links, etc.), rendant le code plus clair et plus testable.  
+- `server.py` : gère uniquement la partie serveur MCP, l’enregistrement des outils et le logging.  
+- `demo_scenario.py` : sert de preuve de fonctionnement et de test automatisé du parcours complet.
+
+Cette architecture permet d’avoir un projet lisible, extensible et facilement maintenable.
+
+---
+
+## ⚙️ 3. Choix techniques principaux
+
+### Utilisation de `uv`
+Le projet utilise **uv** comme gestionnaire de dépendances et d’exécution.  
+Ce choix a été fait car :
+- `uv` est rapide et moderne, recommandé pour les projets Python récents.  
+- Il simplifie la gestion de l’environnement virtuel et des dépendances sans avoir à utiliser `pip` ou `venv`.  
+- Il permet d’exécuter directement le serveur MCP avec une commande claire :  
+  `uv run mcp dev src/webpilot/server.py`  
+  Cette interface de développement intégrée est pratique pour tester les outils et visualiser leurs résultats sans déploiement supplémentaire.
+
+---
+
+### Protocole STDIO
+Le projet utilise actuellement le **mode stdio** pour la communication MCP.  
+Ce mode a été choisi pour sa simplicité d’intégration :
+- il ne nécessite pas de serveur HTTP externe,  
+- il fonctionne parfaitement avec l’outil officiel `mcp dev`,  
+- il est idéal pour les tests locaux ou la démonstration.
+
+Cependant, le **mode SSE (Server-Sent Events)** est prévu comme évolution future.  
+Ce mode permettrait une communication HTTP persistante, mieux adaptée à une mise en production ou à une intégration cloud.
+
+---
+
+### API Asynchrone
+L’ensemble du projet repose sur l’API **asynchrone** de Playwright (`async_playwright`).  
+Ce choix était nécessaire car FastMCP s’exécute déjà sur une boucle asynchrone (`asyncio`), ce qui provoquait des erreurs avec l’API synchrone.  
+L’approche asynchrone présente plusieurs avantages :
+- compatibilité totale avec FastMCP,  
+- meilleure performance (aucun blocage de la boucle d’événements),  
+- exécution fluide de plusieurs actions successives.  
+
+Toutes les fonctions du serveur et des outils sont donc définies avec `async def` et utilisent `await` pour chaque opération Playwright (navigation, clic, capture, etc.).
+
+---
+
+## 🧠 4. Décisions d’implémentation dans le code
+
+### Séparation des outils dans `tools.py`
+Chaque outil (navigate, click, fill, screenshot, extract_links, get_html) a été isolé dans le fichier `tools.py`.  
+Cette séparation permet :
+- d’avoir un code plus modulaire,  
+- de faciliter la lecture et la maintenance,  
+- et de rendre le projet plus facilement testable.
+
+Chaque fonction suit les mêmes principes :
+- **Bloc `try/except`** : pour capturer les erreurs et éviter qu’une exception ne bloque tout le serveur.  
+- **Retour structuré** : les fonctions renvoient un dictionnaire avec toujours les mêmes clés (`ok`, `tool`, `error`, `details`, etc.), ce qui rend les résultats faciles à interpréter.  
+- **Appels asynchrones** : chaque action Playwright est précédée de `await`, afin de respecter la logique non bloquante du serveur.
+
+---
+
+### Exemple du choix d’implémentation de `click`
+L’outil `click` a été conçu pour gérer deux cas possibles :
+1. Le clic provoque une navigation (par exemple un lien).  
+2. Le clic agit sur la page sans navigation (par exemple un bouton JS).  
+
+Pour cela, la fonction essaie d’abord :
+- d’attendre une navigation via `page.expect_navigation`,  
+- et, en cas d’échec, exécute un simple `await page.click(selector)` sans lever d’erreur.
+
+Ce comportement rend la fonction robuste et adaptée à la majorité des cas réels.
+
+---
+
+### Logging
+Les journaux sont gérés avec le module `logging`.  
+Chaque appel d’outil génère un log (succès ou erreur) envoyé vers **`stderr`** afin de :
+- ne pas polluer les sorties JSON envoyées par MCP sur `stdout`,  
+- conserver une trace claire de ce qui se passe côté serveur.  
+
+Cela permet de distinguer les retours “machine” des retours “humains”.
+
+---
+
+## 🧱 5. Difficultés rencontrées et solutions
+
+| Problème | Solution |
+|-----------|-----------|
+| Erreur “Playwright Sync API inside asyncio loop” | Passage complet à `async_playwright` et réécriture des outils avec `await`. |
+| “coroutine not awaited” | Ajout systématique d’`await` dans les appels à `start_browser()` et aux fonctions asynchrones. |
+| Problèmes de structure avec le packaging `uv` | Réorganisation du code dans `src/webpilot` et création du `pyproject.toml`. |
+| Erreurs de construction du package (Hatchling) | Ajout de la section `tool.hatch.build.targets.wheel` pour définir les fichiers à inclure. |
+| Multiplication d’instances du navigateur | Mise en place d’un singleton global dans `browser.py` pour réutiliser le même onglet. |
+
+---
+
+## 🚀 6. Améliorations prévues
+
+- **Ajout du mode SSE (HTTP)** : permettre d’utiliser le serveur via une API web, plus pratique pour une intégration cloud.  
+- **Multi-onglets / multi-sessions** : autoriser plusieurs contextes simultanés.  
+- **Déploiement Cloud** : Docker + AWS ou GCP (Cloud Run, Lambda).  
+- **Tests automatisés** : ajouter des tests unitaires pour chaque outil.  
+- **Intégration IA avancée** : connecter les outils à LangChain, LlamaIndex ou OpenAI Functions.  
+- **Interface web simple** : pour visualiser les captures et le HTML directement depuis le navigateur.
+
+---
+
+**Auteur :** Hippolyte Dupont  
+**Date :** Novembre 2025
