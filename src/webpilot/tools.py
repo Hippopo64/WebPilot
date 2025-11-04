@@ -142,3 +142,60 @@ async def screenshot(page, path: str = "example_viewport.png", full: bool = Fals
     except Exception as e:
         return {"ok": False, "error": "unable to take screenshot", "details": str(e), "url": page.url, "path": path}
 
+async def scroll(page, direction: str = "down", amount: int = 1, px: int = 800) -> dict:
+    """
+    This tool scrolls the page in the specified direction by a certain amount.
+    Args:
+        page: The Playwright page object to perform the scroll on.
+        direction (str): The direction to scroll ("down" or "up").
+        amount (int): The number of times to scroll by the specified pixel amount.
+        px (int): The number of pixels to scroll each time.
+    Returns:
+        dict: A dictionary containing the result of the scroll attempt.
+    """
+    try:
+        total_px = amount * px
+        if direction == "down" or direction == "bottom":
+            await page.evaluate(f"window.scrollBy(0, {total_px})")
+        elif direction == "up" or direction == "top":
+            await page.evaluate(f"window.scrollBy(0, -{total_px})")
+        elif direction == "to_bottom":
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        elif direction == "to_top":
+            await page.evaluate("window.scrollTo(0, 0)")
+        else:
+            return {"ok": False, "error": "invalid_direction", "details": f"Direction '{direction}' is not valid. Use 'down' or 'up'.", "url": page.url}
+        
+        await page.wait_for_timeout(500)
+        return {"ok": True, "direction": direction, "amount": amount, "px": px, "url": page.url}
+    except Exception as e:
+        return {"ok": False, "error": "unable to scroll", "details": str(e), "url": page.url}
+    
+async def scrape_elements(page, selector: str, attribute: str | None = None, max_items: int = 200) -> dict:
+    """
+    This tool scrapes elements from the page based on a CSS selector, optionally extracting a specific attribute.
+    Args:
+        page: The Playwright page object to scrape elements from.
+        selector (str): The CSS selector to identify elements.
+        attribute (str, optional): The attribute to extract from each element. If None, extracts text content.
+        max_items (int): The maximum number of elements to scrape.
+    Returns:
+        dict: A dictionary containing the result of the scrape attempt.
+    """
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=8000)
+        loc = page.locator(selector)
+        count = await loc.count()
+        items = []
+        limit = min(count, max_items)
+        for i in range(limit):
+            element = loc.nth(i)
+            if attribute:
+                value = await element.get_attribute(attribute) or ""
+            else:
+                value = (await element.inner_text()) if await element.is_visible() else None
+            items.append(value)
+
+        return {"ok": True, "selector": selector, "attribute": attribute, "count": count, "items": items, "url": page.url}
+    except Exception as e:
+        return {"ok": False, "error": "unable to scrape elements", "selector": selector, "attribute": attribute, "details": str(e), "url": page.url}

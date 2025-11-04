@@ -1,0 +1,7 @@
+{
+  "url": "https://example.com",
+  "interactions": [
+    { "type": "wait", "ms": 500 }
+  ],
+  "options": { "screenshot": true, "screenshot_path": "after.png" }
+}

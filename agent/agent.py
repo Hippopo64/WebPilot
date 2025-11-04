@@ -12,23 +12,6 @@ class MCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
 
-    # async def connect(self, server_script_path: str, python_cmd: str = "python"):
-    #     # Construit les paramètres pour lancer le serveur en STDIO
-    #     server_params = StdioServerParameters(
-    #         command=python_cmd,
-    #         args=[server_script_path],
-    #         env=None
-    #     )
-    #     # Ouvre le transport stdio, puis crée la session client
-    #     stdio = await self.exit_stack.enter_async_context(stdio_client(server_params))
-    #     self.stdio, self.write = stdio
-    #     self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
-    #     await self.session.initialize()
-
-    #     # Liste les tools exposés par le serveur
-    #     resp = await self.session.list_tools()
-    #     tools = [t.name for t in resp.tools]
-    #     print("🛠️ Tools disponibles:", tools)
     async def connect(self, server_entry: str, mode: str = "python"):
         if mode == "python":
             params = StdioServerParameters(command="python", args=[server_entry], env=None)
@@ -73,6 +56,48 @@ def tool_result_to_dict(res) -> dict:
 
     # Fallback: on renvoie le modèle brut
     return res.model_dump()
+
+# --- helpers ---
+def payload_to_html(payload: dict) -> str:
+    # get_html peut renvoyer "html" ou "content" selon ta version serveur
+    return payload.get("html") or payload.get("content") or ""
+
+async def call_json(session, name, args=None):
+    res = await session.call_tool(name, args or {})
+    return tool_result_to_dict(res)
+
+async def run_flow(session, interactions):
+    for step in interactions:
+        t = step.get("type")
+        try:
+            if t == "wait":
+                await asyncio.sleep(step.get("ms", 500)/1000)
+            elif t == "click":
+                r = await call_json(session, "tool_click", {"selector": step["selector"]})
+                if not r.get("ok") and not step.get("optional"):
+                    return {"ok": False, "error": f"click failed: {r}"}
+            elif t == "fill":
+                r = await call_json(session, "tool_fill", {"selector": step["selector"], "text": step.get("text","")})
+                if not r.get("ok"):
+                    return {"ok": False, "error": f"fill failed: {r}"}
+            elif t == "scroll":
+                # nécessite tool_scroll côté serveur (sinon ignore)
+                try:
+                    r = await call_json(session, "tool_scroll", {
+                        "direction": step.get("direction","down"),
+                        "amount": step.get("amount",1),
+                        "px": step.get("px",800)
+                    })
+                except Exception as e:
+                    if not step.get("optional"):
+                        return {"ok": False, "error": f"scroll failed: {e}"}
+            else:
+                return {"ok": False, "error": f"unknown step type: {t}"}
+        except Exception as e:
+            if step.get("optional"):
+                continue
+            return {"ok": False, "error": f"step '{t}' crashed: {e}"}
+    return {"ok": True}
     
 
 async def main():
@@ -81,23 +106,49 @@ async def main():
         sys.exit(1)
 
     server_path = sys.argv[1]
+    input_path = sys.argv[2] if len(sys.argv) > 2 else "agent/input.example.json"
+    output_path = sys.argv[3] if len(sys.argv) > 3 else "output.json"
     client = MCPClient()
     try:
-        await client.connect("src/webpilot/server.py", mode="python")
+        await client.connect(server_path, mode="python")
+
+        cfg = json.load(open(input_path, "r", encoding="utf-8"))
+        url = cfg["url"]
+        interactions = cfg.get("interactions", [])
+        options = cfg.get("options", {})
 
         # Démo minimale : navigate → screenshot → get_html
-        print("\n🌍 navigate example.com")
-        res = await client.call("tool_navigate", {"url": "https://example.com"})
+        print(f"\n🌍 navigate {url}")
+        res = await client.call("tool_navigate", {"url": url})
         print(json.dumps(tool_result_to_dict(res), indent=2))
 
-        print("\n📸 screenshot")
-        res = await client.call("tool_screenshot", {"path": "example.png", "full": False})
-        print(json.dumps(tool_result_to_dict(res), indent=2))
+        print("\n▶️ run interactions")
+        r = await run_flow(client.session, interactions)
+        print(json.dumps(r, indent=2))
+        if not r.get("ok"):
+            raise RuntimeError(r.get("error"))
 
-        print("\n📄 get_html (length)")
-        res = await client.call("tool_get_html", {})
-        payload = tool_result_to_dict(res)
-        print("HTML length:", len(payload.get("content","")))
+        print("\n📄 get_html")
+        html_res = await client.call("tool_get_html", {})
+        payload = tool_result_to_dict(html_res)
+        html = payload_to_html(payload)
+        print("HTML length:", len(html))
+
+        if options.get("screenshot"):
+            snap_path = options.get("screenshot_path","after.png")
+            print("\n📸 screenshot")
+            snap = await client.call("tool_screenshot", {"path": snap_path, "full": False})
+            print(json.dumps(tool_result_to_dict(snap), indent=2))
+
+        # Output minimal (on remplira plus tard avec data & quality_report)
+        out = {
+            "status": "success",
+            "url": url,
+            "interactions_done": len(interactions),
+            "html_length": len(html)
+        }
+        json.dump(out, open(output_path,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
+        print(f"\n✅ OK -> {output_path}")
 
     finally:
         print("\n🧹 Shutting down...")

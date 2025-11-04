@@ -5,6 +5,7 @@ import logging
 from logging import StreamHandler
 from typing import Optional
 import asyncio
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -153,6 +154,44 @@ async def tool_get_html(save_path: Optional[str]=None):
             res.setdefault("data", {})["saved_to"] = save_path
             res["data"]["length"] = len(html)
     logger.info(f"get_html ok={res.get('ok')} saved={bool(save_path)}")
+    return res
+
+@mcp.tool()
+async def tool_scroll(direction: str="down", amount: int=1, px: int=800):
+    """
+    This tool scrolls the page in the specified direction by a certain amount.
+    Args:
+        direction (str): The direction to scroll ("down" or "up").
+        amount (int): The number of times to scroll by the specified pixel amount.
+        px (int): The number of pixels to scroll each time.
+    Returns:
+        dict: A dictionary containing the result of the scroll attempt.
+    """
+    page = await ensure_page()
+    try:
+        res = await T.scroll(page, direction=direction, amount=amount, px=px)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to scroll", "details": str(e), "url": page.url}
+    logger.info(f"scroll ok={res.get('ok')} direction={direction} amount={amount} px={px}")
+    return res
+
+@mcp.tool()
+async def tool_scrape(selector: str, attribute: str | None = None, max_items: int = 100) -> dict:
+    """
+    This tool scrapes elements from the page based on a CSS selector, optionally extracting a specific attribute.
+    Args:
+        selector (str): The CSS selector to identify elements.
+        attribute (str, optional): The attribute to extract from each element. If None, extracts text content.
+        max_items (int): The maximum number of elements to scrape.
+    Returns:
+        dict: A dictionary containing the result of the scrape attempt.
+    """
+    page = await ensure_page()
+    try:
+        res = await T.scrape(page, selector, attribute=attribute, max_items=max_items)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to scrape", "details": str(e), "url": page.url}
+    logger.info(f"scrape ok={res.get('ok')} selector={selector} attribute={attribute} max_items={max_items}")
     return res
 
 # ------------- Points d'entrée -------------
