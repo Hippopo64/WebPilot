@@ -12,13 +12,13 @@ OUT.mkdir(exist_ok=True)
 async def run_demo():
     p, browser, page = await start_browser()
     try:
-        # 1) Aller sur example.com
-        print("➡️ navigate: https://example.com")
-        r1 = await T.navigate(page, "https://example.com")
+        # 1) Aller sur lequipe.fr
+        print("➡️ navigate: https://lequipe.fr")
+        r1 = await T.navigate(page, "https://lequipe.fr")
         print("   ", r1)
 
         # 2) Screenshot viewport
-        vp_path = OUT / "00_example_viewport.png"
+        vp_path = OUT / "00_lequipe_viewport.png"
         print(f"➡️ screenshot viewport → {vp_path}")
         r2 = await T.screenshot(page, path=str(vp_path), full=False)
         print("   ", r2)
@@ -34,7 +34,7 @@ async def run_demo():
             if not href:
                 continue
             u = urlparse(href)
-            if u.scheme in ("http", "https") and "example.com" not in (u.netloc or ""):
+            if u.scheme in ("http", "https") and "lequipe.fr" not in (u.netloc or ""):
                 external = href
                 break
         if not external and links:

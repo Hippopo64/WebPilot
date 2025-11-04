@@ -1,4 +1,5 @@
 # src/webpilot/server.py
+from datetime import datetime
 import sys
 import logging
 from logging import StreamHandler
@@ -50,7 +51,10 @@ async def tool_navigate(url: str):
         dict: A dictionary containing the result of the navigation attempt.
     """
     page = await ensure_page()
-    res = await T.navigate(page, url)
+    try:
+        res = await T.navigate(page, url)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to navigate", "details": str(e), "url": url}
     logger.info(f"navigate ok={res.get('ok')} url={url}")
     return res
 
@@ -65,7 +69,12 @@ async def tool_screenshot(path: Optional[str]=None, full: bool=False):
         dict: A dictionary containing the result of the screenshot attempt.
     """
     page = await ensure_page()
-    res = await T.screenshot(page, path=path or "snap.png", full=full)
+    try:
+        if not path:
+            path = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        res = await T.screenshot(page, path=path, full=full)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to take screenshot", "details": str(e), "url": page.url, "path": path}
     logger.info(f"screenshot ok={res.get('ok')} path={path} full={full}")
     return res
 
@@ -79,7 +88,10 @@ async def tool_extract_links(contains: Optional[str]=None):
         dict: A dictionary containing the extracted links and related information.
     """
     page = await ensure_page()
-    res = await T.extract_links(page, contains)
+    try:
+        res = await T.extract_links(page, contains)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to extract links", "details": str(e), "url": page.url}
     logger.info(f"extract_links ok={res.get('ok')} count={res.get('count')}")
     return res
 
@@ -94,7 +106,10 @@ async def tool_fill(selector: str, text: str):
         dict: A dictionary containing the result of the fill attempt.
     """
     page = await ensure_page()
-    res = await T.fill(page, selector, text)
+    try:
+        res = await T.fill(page, selector, text)
+    except Exception as e:
+        res = {"ok": False, "error": "element not fillable", "details": str(e), "url": page.url, "selector": selector}
     logger.info(f"fill ok={res.get('ok')} selector={selector}")
     return res
 
@@ -108,7 +123,11 @@ async def tool_click(selector: str):
         dict: A dictionary containing the result of the click attempt.
     """
     page = await ensure_page()
-    res = await T.click(page, selector)
+
+    try:
+        res = await T.click(page, selector)
+    except Exception as e:
+        res = {"ok": False, "error": "element not clickable", "details": str(e), "url": page.url, "selector": selector}
     logger.info(f"click ok={res.get('ok')} selector={selector}")
     return res
 
@@ -155,4 +174,4 @@ def __getattr__(name: str):
 
 if __name__ == "__main__":
     # Lancement “direct” (facultatif) : uv run python -m webpilot.server
-    main_stdio()
+    mcp.run()
