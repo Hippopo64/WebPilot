@@ -3,6 +3,7 @@ import asyncio, sys, json, re
 from contextlib import AsyncExitStack
 from typing import Optional
 from urllib.parse import urlparse
+from datetime import datetime
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -160,6 +161,69 @@ def load_json_file(path: str) -> dict:
         "interactions": interactions,
         "options": options
     }
+
+def convert_to_int(value: str):
+    m = re.search(r'([+-]?\d+)', value)
+    if not m:
+        raise ValueError(f"Value '{value}' is not a valid integer")
+    return int(m.group(1))
+
+def convert_to_float(value: str):
+    m = re.search(r'([+-]?\d+(?:[,.]\d+)?)', value)
+    if not m:
+        raise ValueError(f"Value '{value}' is not a valid float")
+    return float(m.group(1).replace(',', '.'))
+
+def convert_to_bool(value: str):
+    truth = ["true", "1", "yes", "oui", "vrai", "in stock", "disponible", "available", "en stock"]
+    falsy = ["false", "0", "no", "non", "faux", "out of stock", "indisponible", "unavailable", "hors stock"]
+    for k in truth:
+        if k == value.lower():
+            return True
+    for k in falsy:
+        if k == value.lower():
+            return False
+    raise ValueError(f"Value '{value}' is not a valid boolean")
+
+def convert_to_datetime(value: str):
+    dates = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M", "%m/%d/%Y %H:%M", "%Y-%m-%dT%H:%M:%S"]
+    for i in dates:
+        try:
+            return datetime.strptime(value, i).isoformat()
+        except ValueError:
+            continue
+    raise ValueError(f"Value '{value}' is not a valid datetime")
+
+def convert_value(value: str, expected_type: str):
+    """
+    Convert the given value to the expected type.
+    Supported types: int, float, bool, datetime, str.
+    """
+
+    if value is None:
+        return None
+
+    integer = ["int", "integer", "entier"]
+    float = ["float", "number", "nombre", "réel"]
+    boolean = ["bool", "boolean", "booléen"]
+    datetime = ["datetime", "date", "timestamp", "date-time"]
+    string = ["str", "string", "texte", "text"]
+
+    s = str(value).strip().replace("\xa0"," ")
+    t = (expected_type or "string").lower()
+
+    if t in integer:
+        return convert_to_int(s)
+    if t in float:
+        return convert_to_float(s)
+    if t in boolean:
+        return convert_to_bool(s)
+    if t in datetime:
+        return convert_to_datetime(s)
+    if t in string:
+        return s
+    
+    raise ValueError(f"Expected type '{expected_type}' is not supported")
 
 
 async def run_flow(session, interactions):
