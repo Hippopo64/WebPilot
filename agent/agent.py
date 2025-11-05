@@ -1,7 +1,8 @@
 # agent/agent.py
-import asyncio, sys, json
+import asyncio, sys, json, re
 from contextlib import AsyncExitStack
 from typing import Optional
+from urllib.parse import urlparse
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -66,33 +67,144 @@ async def call_json(session, name, args=None):
     res = await session.call_tool(name, args or {})
     return tool_result_to_dict(res)
 
+def is_http_url(url: str) -> bool:
+    try:
+        result = urlparse(url.strip())
+        return all([result.scheme in ("http", "https"), result.netloc])
+    except Exception:
+        return False
+    
+def normalize_options(options: dict) -> dict:
+    if not isinstance(options, dict):
+        options = {}
+
+    res = {}
+    if "pagination" in options:
+        res["pagination"] = bool(options.get("pagination"))
+    else:
+        res["pagination"] = False
+    
+    if "max_pages" in options:
+        if int(options.get("max_pages")) > 0:
+            res["max_pages"] = int(options.get("max_pages"))
+    else:
+        res["max_pages"] = 1
+
+    if "retry_failed" in options:
+        res["retry_failed"] = bool(options.get("retry_failed"))
+    else:
+        res["retry_failed"] = True
+
+    return res
+
+def extract_schema(schema_obj: dict):
+    """
+    Extract the schema sub fields from the given schema object.
+    Return collection_name the name of the collection, entity_schema how is the schema defined, metadata_schema the metadata schema.
+    """
+    if not isinstance(schema_obj, dict) or not schema_obj:
+        raise ValueError("Schema object must be a non-empty dictionary")
+    
+    collection_name = []
+    entity_schema = []
+    metadata_schema = {}
+
+    items = list(schema_obj.items())
+
+    if isinstance(schema_obj.get("metadata"), dict):
+        metadata_schema = schema_obj.get("metadata", {})
+    else:
+        metadata_schema = {}
+
+    for k, v in items:
+        if not isinstance(k, str) or not k.strip():
+            raise ValueError("Collection names must be non-empty strings")
+        if k.lower() == "metadata":
+            continue
+        
+        collection_name.append(k)
+        if isinstance(v, dict):
+            if not v:
+                raise ValueError(f"Schema for collection '{k}' cannot be an empty dictionary")
+            entity_schema.append(v)
+        elif isinstance(v, list):
+            if not v or not isinstance(v[0], dict):
+                raise ValueError(f"Schema for collection '{k}' must be a non-empty list of dictionaries")
+            entity_schema.append(v[0])
+        else:
+            raise ValueError(f"Schema for collection '{k}' must be a dictionary or a list of dictionaries")
+        
+    if not collection_name:
+        raise ValueError("At least one collection must be defined in the schema (other than metadata)")
+
+    return collection_name, entity_schema, metadata_schema
+
+
+def load_json_file(path: str) -> dict:
+    """
+    Load a JSON file from the given path, and extract the fields.
+    """
+    cfg = json.load(open(path, "r", encoding="utf-8"))
+    url = cfg.get("url")
+    if not url or not isinstance(url, str) or not is_http_url(url):
+        raise ValueError("Input JSON must contain a valid 'url' string")
+    names, schema, metadata = extract_schema(cfg.get("schema", {}))
+    interactions = cfg.get("interactions", [])
+    options = normalize_options(cfg.get("options", {}))
+
+    return {
+        "url": url,
+        "collections_names": names,
+        "entity_schemas": schema,
+        "metadata": metadata,
+        "interactions": interactions,
+        "options": options
+    }
+
+
 async def run_flow(session, interactions):
     for step in interactions:
         t = step.get("type")
         try:
-            if t == "wait":
-                await asyncio.sleep(step.get("ms", 500)/1000)
-            elif t == "click":
-                r = await call_json(session, "tool_click", {"selector": step["selector"]})
-                if not r.get("ok") and not step.get("optional"):
-                    return {"ok": False, "error": f"click failed: {r}"}
-            elif t == "fill":
-                r = await call_json(session, "tool_fill", {"selector": step["selector"], "text": step.get("text","")})
-                if not r.get("ok"):
-                    return {"ok": False, "error": f"fill failed: {r}"}
-            elif t == "scroll":
-                # nécessite tool_scroll côté serveur (sinon ignore)
-                try:
-                    r = await call_json(session, "tool_scroll", {
-                        "direction": step.get("direction","down"),
-                        "amount": step.get("amount",1),
-                        "px": step.get("px",800)
-                    })
-                except Exception as e:
-                    if not step.get("optional"):
-                        return {"ok": False, "error": f"scroll failed: {e}"}
-            else:
-                return {"ok": False, "error": f"unknown step type: {t}"}
+            match t:
+                case "wait":
+                    await asyncio.sleep(step.get("ms", 500)/1000)
+                case "click":
+                    r = await call_json(session, "tool_click", {"selector": step["selector"]})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"click failed: {r}"}
+                case "fill":
+                    r = await call_json(session, "tool_fill", {"selector": step["selector"], "text": step.get("text","")})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"fill failed: {r}"}
+                case "scroll":
+                    r = await call_json(session, "tool_scroll", {"direction": step.get("direction","down"), "amount": step.get("amount",1), "px": step.get("px",800)})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"scroll failed: {r}"}
+                case "navigate":
+                    r = await call_json(session, "tool_navigate", {"url": step["url"]})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"navigate failed: {r}"}
+                case "screenshot":
+                    r = await call_json(session, "tool_screenshot", {"path": step.get("path","step_screenshot.png"), "full": step.get("full",False)})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"screenshot failed: {r}"}
+                case "extract_links":
+                    r = await call_json(session, "tool_extract_links", {"contains": step.get("contains")})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"extract_links failed: {r}"}
+                case "get_html":
+                    r = await call_json(session, "tool_get_html", {"save_path": step.get("save_path")})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"get_html failed: {r}"}
+                case "scrape":
+                    r = await call_json(session, "tool_scrape_elements", {"selector": step.get("selector"), "attribute": step.get("attribute"), "max_items": step.get("max_items",200)})
+                    if not r.get("ok") and not step.get("optional"):
+                        return {"ok": False, "error": f"scrape failed: {r}"}
+                
+                case _:
+                    return {"ok": False, "error": f"unknown step type: {t}"}
+                
         except Exception as e:
             if step.get("optional"):
                 continue
@@ -114,6 +226,8 @@ async def main():
 
         cfg = json.load(open(input_path, "r", encoding="utf-8"))
         url = cfg["url"]
+        if not url or not isinstance(url, str):
+            raise ValueError("Input JSON must contain a valid 'url' string")
         interactions = cfg.get("interactions", [])
         options = cfg.get("options", {})
 

@@ -176,7 +176,7 @@ async def tool_scroll(direction: str="down", amount: int=1, px: int=800):
     return res
 
 @mcp.tool()
-async def tool_scrape(selector: str, attribute: str | None = None, max_items: int = 100) -> dict:
+async def tool_scrape_elements(selector: str, attribute: str | None = None, max_items: int = 100) -> dict:
     """
     This tool scrapes elements from the page based on a CSS selector, optionally extracting a specific attribute.
     Args:
@@ -188,7 +188,7 @@ async def tool_scrape(selector: str, attribute: str | None = None, max_items: in
     """
     page = await ensure_page()
     try:
-        res = await T.scrape(page, selector, attribute=attribute, max_items=max_items)
+        res = await T.scrape_elements(page, selector, attribute=attribute, max_items=max_items)
     except Exception as e:
         res = {"ok": False, "error": "unable to scrape", "details": str(e), "url": page.url}
     logger.info(f"scrape ok={res.get('ok')} selector={selector} attribute={attribute} max_items={max_items}")
