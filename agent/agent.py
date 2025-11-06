@@ -9,6 +9,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, BlobResourceContents
 
+
 class MCPClient:
     def __init__(self):
         self.session: Optional[ClientSession] = None
@@ -33,6 +34,7 @@ class MCPClient:
 
     async def close(self):
         await self.exit_stack.aclose()
+
 
 def tool_result_to_dict(res) -> dict:
     """
@@ -75,6 +77,7 @@ def is_http_url(url: str) -> bool:
     except Exception:
         return False
     
+
 def normalize_options(options: dict) -> dict:
     if not isinstance(options, dict):
         options = {}
@@ -162,6 +165,7 @@ def load_json_file(path: str) -> dict:
         "options": options
     }
 
+
 def convert_to_int(value: str):
     m = re.search(r'([+-]?\d+)', value)
     if not m:
@@ -224,6 +228,134 @@ def convert_value(value: str, expected_type: str):
         return s
     
     raise ValueError(f"Expected type '{expected_type}' is not supported")
+
+
+def split_selector_attribute(selector: str) -> tuple[str, Optional[str]]:
+    """
+    Split a selector string into selector and attribute.
+    Example: "div.product@text" -> ("div.product", "text")
+    """
+    parts = selector.split("@")
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip()
+    return selector.strip(), None
+
+def normalize_fields_map(fields_map: dict, prefix: str = "") -> dict[str, list[str]]:
+    """
+    Normalize the fields map to ensure each field maps to a list of selectors.
+    The llm return a dict like : 
+    {
+        "title": "div.product-title",
+        "price": ["span.price", "div.cost"],
+        "specs": {"cpu": "div.cpu", "ram": "div.ram"}
+    }
+    Returns:
+        dict[str, list[str]]: A normalized fields map like : 
+    {
+        "title": ["div.product-title"],
+        "price": ["span.price", "div.cost"],
+        "specs.cpu": ["div.cpu"],
+        "specs.ram": ["div.ram"]
+    }
+    """
+    if not isinstance(fields_map, dict) or not fields_map:
+        raise ValueError("Fields map cannot be empty")
+    
+    res = {}
+    for field, sel in fields_map.items():
+        current_field = field
+        if not sel:
+            raise ValueError(f"Selector for field '{field}' cannot be empty")
+
+        if prefix:
+            current_field = f"{prefix}.{field}"
+        if isinstance(sel, str):
+            res[current_field] = [sel]
+        elif isinstance(sel, list):
+            for s in sel:
+                if not isinstance(s, str):
+                    raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
+            res[current_field] = sel
+        elif isinstance(sel, dict):
+            res.update(normalize_fields_map(sel, prefix=current_field))
+        else:
+            raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
+    
+    return res
+
+
+async def scrape_page_with_map(session, llm_map: dict, max_items: int = 500) -> list[dict]:
+    """
+    Scrape the current page using a mapping of field names to selectors.
+    Args:
+        session: The MCP client session.
+        llm_map (dict): A mapping of field names to CSS selectors (with optional @attribute).
+        max_items (int): Maximum number of items to scrape per field.
+    Returns:
+        list[dict]: A list of dictionaries containing the scraped data.
+    """
+    item_sel = (llm_map.get("item_selector", "")).strip() or None
+    fields_map = normalize_fields_map(llm_map.get("fields", {}))
+
+    count = None
+    if item_sel:
+        res = await call_json(session, "tool_scrape_elements", {"selector": item_sel, "max_items": max_items})
+        if res.get("ok"):
+            count = res.get("count", 0)
+        else:
+            count = None
+
+    columns: dict[str, list] = {}
+    for field, selectors in fields_map.items():
+        items = []
+        if isinstance(selectors, list) and selectors:
+            for sel in selectors:
+                vals = []
+                sel_css, attr = split_selector_attribute(sel)
+                if item_sel and sel_css:
+                    full_selector = f"{item_sel} {sel_css}".strip()
+                else:
+                    full_selector = sel_css
+                res = await call_json(session, "tool_scrape_elements", {"selector": full_selector, "attribute": attr, "max_items": max_items})
+                if res.get("ok"):
+                    vals = res.get("items", [])
+                if vals:
+                    items = vals
+                    break
+        else:
+            raise ValueError(f"Selectors for field '{field}' must be a non-empty list of strings")
+        
+        columns[field] = items
+        if count is None and items:
+            count = len(items)
+
+
+    count = count or 0
+
+    data = []
+    for i in range(count):
+        row = {}
+        for field, items in columns.items():
+            if "." in field: # to change the . into {}
+                parts = field.split(".") #specs.cpu.cpu1.brand for example is separated
+                current = row
+                size = len(parts) #number of parts
+                for j in range(size - 1): # we go through all parts except the last one
+                    if parts[j] not in current: #if the part does not exist yet
+                        current[parts[j]] = {} #we create
+                    current = current[parts[j]] # we go to next part
+                if i < len(items):
+                    current[parts[size - 1]] = items[i] # Remember that parts contains the name and items the value
+                else:
+                    current[parts[size - 1]] = None
+            else:
+                if i < len(items):
+                    row[field] = items[i]
+                else:
+                    row[field] = None
+        data.append(row)
+
+    return data
 
 
 async def run_flow(session, interactions):
