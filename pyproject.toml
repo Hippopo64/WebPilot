@@ -22,3 +22,8 @@ webpilot-http = "webpilot.server_http:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]

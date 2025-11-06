@@ -89,8 +89,11 @@ def normalize_options(options: dict) -> dict:
         res["pagination"] = False
     
     if "max_pages" in options:
-        if int(options.get("max_pages")) > 0:
-            res["max_pages"] = int(options.get("max_pages"))
+        try:
+            val = int(options.get("max_pages"))
+        except Exception:
+            val = 1
+        res["max_pages"] = max(1, val)
     else:
         res["max_pages"] = 1
 
@@ -173,7 +176,8 @@ def convert_to_int(value: str):
     return int(m.group(1))
 
 def convert_to_float(value: str):
-    m = re.search(r'([+-]?\d+(?:[,.]\d+)?)', value)
+    cleaned_value = value.replace(' ', '').replace('\xa0', '')
+    m = re.search(r'([+-]?\d+(?:[,.]\d+)?)', cleaned_value)
     if not m:
         raise ValueError(f"Value '{value}' is not a valid float")
     return float(m.group(1).replace(',', '.'))
