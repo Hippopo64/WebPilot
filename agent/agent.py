@@ -2,12 +2,39 @@
 import asyncio, sys, json, re
 from contextlib import AsyncExitStack
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from datetime import datetime
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, BlobResourceContents
+
+GENERIC_NEXT_SELECTORS= [
+    "a[rel='next']",
+    "[data-test-id*='pagination-next' i]",
+    "[data-testid*='pagination-next' i]",
+    "[id*='pagination-next' i]",
+    "[class*='next-page' i]",
+    "[data-part*='next' i]",
+    "button[rel='next']",
+    "a[aria-label*='next' i]",
+    "button[aria-label*='next' i]",
+    "a:has-text('Next')",
+    "a:has-text('Suivant')",
+    "button:has-text('Next')",
+    "button:has-text('Suivant')",
+    "a.pagination-next",
+    "button.pagination-next",
+    "a[role='button']:has-text('Next')",
+    "a[role='button']:has-text('Suivant')",
+    "[aria-label*='next' i]",
+    "[aria-label*='suivant' i]",
+    "[class*='pagination-next' i]",
+    "text='Next'",
+    "text='Suivant'",
+    "text='»'",
+    "text='›'"
+]
 
 
 class MCPClient:
@@ -462,6 +489,42 @@ def process_scraped_data(raw_data: list[dict], entity_schema: dict) -> tuple[lis
     }
 
     return clean_data, quality_report
+
+
+async def try_click(session: ClientSession, selector: str) -> bool:
+    if not selector:
+        return False
+    sel_css, tmp = split_selector_attribute(selector)
+    click = await call_json(session, "tool_click", {"selector": sel_css})
+
+    if click.get("ok"):
+        return True
+    else:
+        return False
+    
+async def find_and_click_next(session: ClientSession, llm_selector: str | list[str] | None) -> bool:
+    click_ok = False
+    
+    llm_selector_list = []
+    if isinstance(llm_selector, str) and llm_selector.strip():
+        llm_selector_list = [llm_selector.strip()]
+    elif isinstance(llm_selector, list):
+        llm_selector_list = llm_selector
+
+    if llm_selector_list:
+        for llm_sel in llm_selector_list:
+            click_ok = await try_click(session, llm_sel)
+            if click_ok:
+                return True
+    
+    for gen_sel in GENERIC_NEXT_SELECTORS:
+        click_ok = await try_click(session, gen_sel)
+        if click_ok:
+            return True
+    return False
+
+
+
 
 
 async def run_flow(session, interactions):
