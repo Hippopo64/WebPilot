@@ -280,48 +280,108 @@ def split_selector_attribute(selector: str) -> tuple[str, Optional[str]]:
         return parts[0].strip(), parts[1].strip()
     return selector.strip(), None
 
-def normalize_fields_map(fields_map: dict, prefix: str = "") -> dict[str, list[str]]:
-    """
-    Normalize the fields map to ensure each field maps to a list of selectors.
-    The llm return a dict like : 
-    {
-        "title": "div.product-title",
-        "price": ["span.price", "div.cost"],
-        "specs": {"cpu": "div.cpu", "ram": "div.ram"}
-    }
-    Returns:
-        dict[str, list[str]]: A normalized fields map like : 
-    {
-        "title": ["div.product-title"],
-        "price": ["span.price", "div.cost"],
-        "specs.cpu": ["div.cpu"],
-        "specs.ram": ["div.ram"]
-    }
-    """
-    if not isinstance(fields_map, dict) or not fields_map:
-        raise ValueError("Fields map cannot be empty")
+# def normalize_fields_map(fields_map: dict, prefix: str = "") -> dict[str, list[str]]:
+#     """
+#     Normalize the fields map to ensure each field maps to a list of selectors.
+#     The llm return a dict like : 
+#     {
+#         "title": "div.product-title",
+#         "price": ["span.price", "div.cost"],
+#         "specs": {"cpu": "div.cpu", "ram": "div.ram"}
+#     }
+#     Returns:
+#         dict[str, list[str]]: A normalized fields map like : 
+#     {
+#         "title": ["div.product-title"],
+#         "price": ["span.price", "div.cost"],
+#         "specs.cpu": ["div.cpu"],
+#         "specs.ram": ["div.ram"]
+#     }
+#     """
+#     if not isinstance(fields_map, dict) or not fields_map:
+#         raise ValueError("Fields map cannot be empty")
     
-    res = {}
-    for field, sel in fields_map.items():
-        current_field = field
-        if not sel:
-            raise ValueError(f"Selector for field '{field}' cannot be empty")
+#     res = {}
+#     for field, sel in fields_map.items():
+#         current_field = field
+#         if not sel:
+#             raise ValueError(f"Selector for field '{field}' cannot be empty")
 
-        if prefix:
-            current_field = f"{prefix}.{field}"
-        if isinstance(sel, str):
-            res[current_field] = [sel]
-        elif isinstance(sel, list):
-            for s in sel:
-                if not isinstance(s, str):
-                    raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
-            res[current_field] = sel
-        elif isinstance(sel, dict):
-            res.update(normalize_fields_map(sel, prefix=current_field))
-        else:
-            raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
+#         if prefix:
+#             current_field = f"{prefix}.{field}"
+#         if isinstance(sel, str):
+#             res[current_field] = [sel]
+#         elif isinstance(sel, list):
+#             for s in sel:
+#                 if not isinstance(s, str):
+#                     raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
+#             res[current_field] = sel
+#         elif isinstance(sel, dict):
+#             res.update(normalize_fields_map(sel, prefix=current_field))
+#         else:
+#             raise ValueError(f"Selector for field '{field}' must be a string or a list of strings")
     
-    return res
+#     return res
+
+async def scrape_item_recursive(session: ClientSession, base_selector: str, field_map: dict) -> dict:
+    """
+    Scrape a single item recursively based on the field map.
+    Args:
+        session: The MCP client session.
+        base_selector (str): The base CSS selector for the item.
+        field_map (dict): A mapping of field names to selectors (with optional @attribute).
+    Returns:
+        dict: A dictionary containing the scraped data for the item.
+    """
+    item_data = {}
+    simple_fields = {}
+    for field, selector in field_map.items():
+        if isinstance(selector, str):
+            simple_fields[field] = selector
+
+    # simple_fields = {f: s for f, s in field_map.items() if isinstance(s, str)}
+    # nested_fields = {f: s for f, s in field_map.items() if isinstance(s, dict)}
+    
+    for field, selector in simple_fields.items():
+        sel_css, attr = split_selector_attribute(selector)
+        if selector.strip() == "@self":
+            sel_css = ""
+            attr = "text-content"
+        
+        full_selector = f"{base_selector} {sel_css}".strip()
+        scrape_args = {"selector": full_selector, "max_items": 1}
+        if attr == "text-content":
+            scrape_args["attribute"] = None
+        elif attr:
+            scrape_args["attribute"] = attr
+        
+        res = await call_json(session, "tool_scrape_elements", scrape_args)
+
+        if res.get("ok") and res.get("items"):
+            if res["items"]:
+                item_data[field] = res["items"][0]
+            else:
+                item_data[field] = None
+        else:
+            item_data[field] = None
+    
+    nested_fields = {}
+    for field, selector in field_map.items():
+        if isinstance(selector, dict):
+            nested_fields[field] = selector
+    
+    for field, sub_map in nested_fields.items():
+        sub_item_selector = sub_map.get("item_selector")
+        sub_fields_map = sub_map.get("fields", {})
+
+        if not sub_item_selector:
+            continue
+        
+        full_sub_selector = f"{base_selector} {sub_item_selector}".strip()
+        item_data[field] = await scrape_page_with_map(session, {"item_selector": full_sub_selector, "fields": sub_fields_map})
+
+    return item_data
+
 
 
 async def scrape_page_with_map(session, llm_map: dict, max_items: int = 500) -> list[dict]:
@@ -335,67 +395,77 @@ async def scrape_page_with_map(session, llm_map: dict, max_items: int = 500) -> 
         list[dict]: A list of dictionaries containing the scraped data.
     """
     item_sel = (llm_map.get("item_selector", "")).strip() or None
-    fields_map = normalize_fields_map(llm_map.get("fields", {}))
+    fields_map = llm_map.get("fields", {})
+
+    if not item_sel:
+        raise ValueError("Item selector is required in llm_map for scraping")
 
     count = None
-    if item_sel:
-        res = await call_json(session, "tool_scrape_elements", {"selector": item_sel, "max_items": max_items})
-        if res.get("ok"):
-            count = res.get("count", 0)
-        else:
-            count = None
+    res = await call_json(session, "tool_scrape_elements", {"selector": item_sel, "max_items": max_items, "attribute": "innerHTML"})
+    if not res.get("ok"):
+        return []
+    
+    count = min(res.get("count", 0), max_items)
 
-    columns: dict[str, list] = {}
-    for field, selectors in fields_map.items():
-        items = []
-        if isinstance(selectors, list) and selectors:
-            for sel in selectors:
-                vals = []
-                sel_css, attr = split_selector_attribute(sel)
-                if item_sel and sel_css:
-                    full_selector = f"{item_sel} {sel_css}".strip()
-                else:
-                    full_selector = sel_css
-                res = await call_json(session, "tool_scrape_elements", {"selector": full_selector, "attribute": attr, "max_items": max_items})
-                if res.get("ok"):
-                    vals = res.get("items", [])
-                if vals:
-                    items = vals
-                    break
-        else:
-            raise ValueError(f"Selectors for field '{field}' must be a non-empty list of strings")
-        
-        columns[field] = items
-        if count is None and items:
-            count = len(items)
-
-
-    count = count or 0
-
-    data = []
+    all_items_data = []
     for i in range(count):
-        row = {}
-        for field, items in columns.items():
-            if "." in field: # to change the . into {}
-                parts = field.split(".") #specs.cpu.cpu1.brand for example is separated
-                current = row
-                size = len(parts) #number of parts
-                for j in range(size - 1): # we go through all parts except the last one
-                    if parts[j] not in current: #if the part does not exist yet
-                        current[parts[j]] = {} #we create
-                    current = current[parts[j]] # we go to next part
-                if i < len(items):
-                    current[parts[size - 1]] = items[i] # Remember that parts contains the name and items the value
-                else:
-                    current[parts[size - 1]] = None
-            else:
-                if i < len(items):
-                    row[field] = items[i]
-                else:
-                    row[field] = None
-        data.append(row)
+        item_base_selector = f"{item_sel}:nth-of-type({i + 1})"
+        item_data = await scrape_item_recursive(session, item_base_selector, fields_map)
+        all_items_data.append(item_data)
+    
+    return all_items_data
 
-    return data
+    # columns: dict[str, list] = {}
+    # for field, selectors in fields_map.items():
+    #     items = []
+    #     if isinstance(selectors, list) and selectors:
+    #         for sel in selectors:
+    #             vals = []
+    #             sel_css, attr = split_selector_attribute(sel)
+    #             if item_sel and sel_css:
+    #                 full_selector = f"{item_sel} {sel_css}".strip()
+    #             else:
+    #                 full_selector = sel_css
+    #             res = await call_json(session, "tool_scrape_elements", {"selector": full_selector, "attribute": attr, "max_items": max_items})
+    #             if res.get("ok"):
+    #                 vals = res.get("items", [])
+    #             if vals:
+    #                 items = vals
+    #                 break
+    #     else:
+    #         raise ValueError(f"Selectors for field '{field}' must be a non-empty list of strings")
+        
+    #     columns[field] = items
+    #     if count is None and items:
+    #         count = len(items)
+
+
+    # count = count or 0
+
+    # data = []
+    # for i in range(count):
+    #     row = {}
+    #     for field, items in columns.items():
+    #         if "." in field: # to change the . into {}
+    #             parts = field.split(".") #specs.cpu.cpu1.brand for example is separated
+    #             current = row
+    #             size = len(parts) #number of parts
+    #             for j in range(size - 1): # we go through all parts except the last one
+    #                 if parts[j] not in current: #if the part does not exist yet
+    #                     current[parts[j]] = {} #we create
+    #                 current = current[parts[j]] # we go to next part
+    #             if i < len(items):
+    #                 current[parts[size - 1]] = items[i] # Remember that parts contains the name and items the value
+    #             else:
+    #                 current[parts[size - 1]] = None
+    #         else:
+    #             if i < len(items):
+    #                 row[field] = items[i]
+    #             else:
+    #                 row[field] = None
+    #     data.append(row)
+
+    # return data
 
 
 def clean_item_data(raw_node: dict, schema_node: dict, path_prefix: str = "") -> tuple[dict, list[str]]:
@@ -418,7 +488,23 @@ def clean_item_data(raw_node: dict, schema_node: dict, path_prefix: str = "") ->
         
         value = raw_node.get(field)
 
-        if isinstance(expected_type, dict):
+        if isinstance(expected_type, list):
+            sub_node = value
+            if not isinstance(value, list):
+                sub_node = []
+                if value is None:
+                    error_list.append(f"Field '{current_path}': missing")
+                else:
+                    error_list.append(f"Field '{current_path}': expected list but got {type(value)}")
+            tmp_cleaned = []
+            for i in range(len(sub_node)):
+                sub_cleaned, sub_errors = clean_item_data(sub_node[i], expected_type[0], f"{current_path}[{i}]")
+                tmp_cleaned.append(sub_cleaned)
+                error_list.extend(sub_errors)
+            
+            cleaned[field] = tmp_cleaned
+
+        elif isinstance(expected_type, dict):
             sub_node = value
             if not isinstance(value, dict):
                 sub_node = {}
@@ -591,43 +677,43 @@ def save_output(path: str, data: dict):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-async def run_scraping_loop(session: ClientSession, llm_map: dict, options: dict):
-    """
-    Do the main loop, scraping elements sent by the llm, doing it through number of pages asked by user
-    Args:
-        session: The MCP client session.
-        llm_map (dict): A mapping of field names to CSS selectors (with optional @attribute).
-        options (dict): Options for pagination and retries.
-    Returns:
-        list[dict]: The scraped data.
-    """
-    all_data = []
-    max_pages = options.get("max_pages", 1)
+# async def run_scraping_loop(session: ClientSession, llm_map: dict, options: dict):
+#     """
+#     Do the main loop, scraping elements sent by the llm, doing it through number of pages asked by user
+#     Args:
+#         session: The MCP client session.
+#         llm_map (dict): A mapping of field names to CSS selectors (with optional @attribute).
+#         options (dict): Options for pagination and retries.
+#     Returns:
+#         list[dict]: The scraped data.
+#     """
+#     all_data = []
+#     max_pages = options.get("max_pages", 1)
 
-    for page_num in range(max_pages):
-        print(f"Scraping page {page_num + 1}/{max_pages}")
-        page_data = await scrape_page_with_map(session, llm_map)
-        if not page_data:
-            print("No data scraped on this page, stopping.")
-            break
-        all_data.extend(page_data)
+#     for page_num in range(max_pages):
+#         print(f"Scraping page {page_num + 1}/{max_pages}")
+#         page_data = await scrape_page_with_map(session, llm_map)
+#         if not page_data:
+#             print("No data scraped on this page, stopping.")
+#             break
+#         all_data.extend(page_data)
 
-        if page_num == max_pages - 1:
-            is_last_page = True
-        else:
-            is_last_page = False
+#         if page_num == max_pages - 1:
+#             is_last_page = True
+#         else:
+#             is_last_page = False
 
-        if is_last_page or not options.get("pagination", False):
-            break
+#         if is_last_page or not options.get("pagination", False):
+#             break
 
-        click_success = await find_and_click_next(session, llm_map.get("pagination_selector"))
-        if not click_success:
-            print("No 'next' button found, stopping pagination.")
-            break
+#         click_success = await find_and_click_next(session, llm_map.get("pagination_selector"))
+#         if not click_success:
+#             print("No 'next' button found, stopping pagination.")
+#             break
 
-        await asyncio.sleep(2)  # wait for page to load
+#         await asyncio.sleep(2)  # wait for page to load
 
-    return all_data
+#     return all_data
 
 async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
     """
@@ -640,21 +726,16 @@ async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
         dict: The extracted LLM map.
     """
     full_mock_map = {
-        # La clé "citations" doit correspondre à celle du input.json
         "citations": { 
-            
-            # Le conteneur pour UNE SEULE citation
             "item_selector": "div.quote",
-            
-            # Les champs à l'intérieur de l'item_selector
             "fields": {
                 "texte": "span.text",
                 "auteur": "small.author"
+                # Pas de champ 'tags'
             },
-            
-            # Le bouton pour la page suivante
             "pagination_selector": "li.next > a"
         }
+        # Pas de 'top_tags'
     }
     
     print("🗺️ Carte des sélecteurs (simulée quotes.toscrape) reçue.")
@@ -665,8 +746,8 @@ async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
 
 def build_final_output(config: dict, cleaned_data: dict, quality_report: dict) -> dict:
     metadata = config.get("metadata", {})
-    if "data-extraction" in metadata:
-        metadata["data-extraction"] = datetime.now().isoformat()
+    if "date_extraction" in metadata:
+        metadata["date_extraction"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if "nb_resultats" in  metadata:
         total_results = 0
         for items in cleaned_data.values():
@@ -722,6 +803,7 @@ async def main():
         
         interactions = config.get("interactions", [])
         options = config.get("options", {})
+        max_pages = options.get("max_pages", 1)
 
         # Démo minimale : navigate → screenshot → get_html
         print(f"\n🌍 navigate {url}")
@@ -733,17 +815,67 @@ async def main():
         print(json.dumps(r, indent=2))
         if not r.get("ok"):
             raise RuntimeError(r.get("error"))
-
-        print("\n📄 get_html")
-        content = await call_json(client, "tool_get_html", {})
-        html = content_to_html(content)
-        print("HTML length:", len(html))
-
-        schema_for_ia = {}
-        for name, schema in zip(config.get("collections_names", []), config.get("entity_schemas", [])):
-            schema_for_ia[name] = schema
         
-        llm_map = await get_llm_map(client.session, schema_for_ia, html)
+        all_raw_data = {}
+        for name in config["collections_names"]:
+            all_raw_data[name] = []
+
+        for page_num in range(max_pages):
+            print(f"\n📄 get_html for page {page_num + 1}/{max_pages}")
+            content = await call_json(client, "tool_get_html", {})
+            html = content_to_html(content)
+            print("HTML length:", len(html))
+
+            schema_for_ia = {}
+            for name, schema in zip(config.get("collections_names", []), config.get("entity_schemas", [])):
+                schema_for_ia[name] = schema
+            
+            llm_map = await get_llm_map(client, schema_for_ia, html)
+
+            for collection_name in config.get("collections_names", []):
+                collection_map = llm_map.get(collection_name, {})
+                if not collection_map:
+                    print(f"⚠️ No LLM map found for collection '{collection_name}', skipping.")
+                    continue
+
+                page_data = await scrape_page_with_map(client, collection_map, options.get("max_items_per_page", 500))
+
+                if page_data:
+                    all_raw_data[collection_name].extend(page_data)
+                    print(f"Found {len(page_data)} items for '{collection_name}'")
+                else:
+                    print(f"No items found for '{collection_name}' on this page.")
+
+            is_last_page = (page_num == max_pages - 1)
+            if is_last_page or not options.get("pagination", False):
+                break
+            
+            pagination_selector = None
+            for cmap in llm_map.values():
+                if cmap.get("pagination_selector"):
+                    pagination_selector = cmap.get("pagination_selector")
+                    break
+            
+            if not pagination_selector:
+                print("⚠️ No pagination selector found in LLM map, stopping pagination.")
+                break
+
+            click_success = await find_and_click_next(client, pagination_selector)
+            if not click_success:
+                print("No 'next' button found, stopping pagination.")
+                break
+            await asyncio.sleep(2)  # wait for page to load
+        
+        # print("\n📄 get_html")
+        # content = await call_json(client, "tool_get_html", {})
+        # html = content_to_html(content)
+        # print("HTML length:", len(html))
+
+        # schema_for_ia = {}
+        # for name, schema in zip(config.get("collections_names", []), config.get("entity_schemas", [])):
+        #     schema_for_ia[name] = schema
+        
+        # llm_map = await get_llm_map(client.session, schema_for_ia, html)
 
         all_clean_data = {}
         all_reports = {}
@@ -756,7 +888,7 @@ async def main():
 
             entity_schema = config.get("entity_schemas", [])[i]
             print(f"\n run_scraping_loop for collection '{collection_name}'")
-            raw_data = await run_scraping_loop(client, collection_map, options)
+            raw_data = all_raw_data.get(collection_name, [])
             print(f"Total items scraped for '{collection_name}': {len(raw_data)}")
 
             print(f"\n🧹 process_scraped_data for collection '{collection_name}'")

@@ -129,6 +129,8 @@ async def tool_click(selector: str):
         res = await T.click(page, selector)
     except Exception as e:
         res = {"ok": False, "error": "element not clickable", "details": str(e), "url": page.url, "selector": selector}
+    if res.get("ok"):
+        await asyncio.sleep(1)  # Attente après clic réussi
     logger.info(f"click ok={res.get('ok')} selector={selector}")
     return res
 

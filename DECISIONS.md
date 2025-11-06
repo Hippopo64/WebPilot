@@ -145,6 +145,7 @@ dans agent beaucoup d'ajout de fonctions utiles
 Pour convert on retourne un tuple car au debut on faisait des erreurs mais on veut pas arreter tout le programme du coup tuple, avec retour et none si bon et sinon none et l'erreur
 Peut gerer le cas ou y'a produits seul mais aussi chaussures et tee shirts, fonctions bien faites
 peut etre diviser en plusieurs fichiers avec types de fonctions ensembles
+le wait du click dans tools déplacé dans server pour vérifier et wait que si c'est bon
 
 
 **Auteur :** Hippolyte Dupont  

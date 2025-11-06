@@ -92,7 +92,6 @@ async def click(page, selector: str) -> dict:
             if "timeout" not in str(nav_e).lower():
                 raise nav_e
             
-            await page.wait_for_timeout(500)
             return {"ok": True, "url": page.url, "selector": selector, "note": "no navigation occurred"}
 
         return {"ok": True, "url": page.url, "selector": selector}
@@ -193,7 +192,13 @@ async def scrape_elements(page, selector: str, attribute: str | None = None, max
             if attribute:
                 value = await element.get_attribute(attribute) or ""
             else:
-                value = (await element.inner_text()) if await element.is_visible() else None
+                value = await element.text_content()
+
+            if value is not None:
+                value = value.replace('\xa0', ' ').strip()
+            if value == "":
+                value = None
+            
             items.append(value)
 
         return {"ok": True, "selector": selector, "attribute": attribute, "count": count, "items": items, "url": page.url}

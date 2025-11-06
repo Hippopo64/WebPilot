@@ -6,14 +6,13 @@
             "auteur": "string"
         },
         "metadata": {
-            "source": "quotes.toscrape",
-            "nb_resultats": 0
+            "date_extraction": "datetime",
+            "nb_resultats": "number"
         }
     },
     "interactions": [],
     "options": {
         "pagination": true,
-        "max_pages": 3,
-        "retry_failed": true
+        "max_pages": 2
     }
 }
