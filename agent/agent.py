@@ -89,12 +89,12 @@ def tool_result_to_dict(res) -> dict:
     return res.model_dump()
 
 # --- helpers ---
-def payload_to_html(payload: dict) -> str:
+def content_to_html(content: dict) -> str:
     # get_html peut renvoyer "html" ou "content" selon ta version serveur
-    return payload.get("html") or payload.get("content") or ""
+    return content.get("html") or content.get("content") or ""
 
-async def call_json(session, name, args=None):
-    res = await session.call_tool(name, args or {})
+async def call_json(session: MCPClient, name, args=None):
+    res = await session.call(name, args or {})
     return tool_result_to_dict(res)
 
 def is_http_url(url: str) -> bool:
@@ -527,7 +527,7 @@ async def find_and_click_next(session: ClientSession, llm_selector: str | list[s
 
 
 
-async def run_flow(session, interactions):
+async def run_flow(session, interactions: list[dict]):
     for step in interactions:
         t = step.get("type")
         try:
@@ -577,57 +577,203 @@ async def run_flow(session, interactions):
     return {"ok": True}
     
 
-async def main():
+def args():
     if len(sys.argv) < 2:
-        print("Usage: uv run python agent/agent.py src/webpilot/server.py")
+        print("Usage: uv run python agent/agent.py src/webpilot/server.py [input.json] [output.json]")
         sys.exit(1)
 
     server_path = sys.argv[1]
     input_path = sys.argv[2] if len(sys.argv) > 2 else "agent/input.example.json"
     output_path = sys.argv[3] if len(sys.argv) > 3 else "output.json"
+    return server_path, input_path, output_path
+
+def save_output(path: str, data: dict):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+async def run_scraping_loop(session: ClientSession, llm_map: dict, options: dict):
+    """
+    Do the main loop, scraping elements sent by the llm, doing it through number of pages asked by user
+    Args:
+        session: The MCP client session.
+        llm_map (dict): A mapping of field names to CSS selectors (with optional @attribute).
+        options (dict): Options for pagination and retries.
+    Returns:
+        list[dict]: The scraped data.
+    """
+    all_data = []
+    max_pages = options.get("max_pages", 1)
+
+    for page_num in range(max_pages):
+        print(f"Scraping page {page_num + 1}/{max_pages}")
+        page_data = await scrape_page_with_map(session, llm_map)
+        if not page_data:
+            print("No data scraped on this page, stopping.")
+            break
+        all_data.extend(page_data)
+
+        if page_num == max_pages - 1:
+            is_last_page = True
+        else:
+            is_last_page = False
+
+        if is_last_page or not options.get("pagination", False):
+            break
+
+        click_success = await find_and_click_next(session, llm_map.get("pagination_selector"))
+        if not click_success:
+            print("No 'next' button found, stopping pagination.")
+            break
+
+        await asyncio.sleep(2)  # wait for page to load
+
+    return all_data
+
+async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
+    """
+    Extract the LLM map from the HTML content using the provided schema.
+    Args:
+        session: The MCP client session.
+        schema: The schema to use for extraction.
+        html: The HTML content to extract data from.
+    Returns:
+        dict: The extracted LLM map.
+    """
+    full_mock_map = {
+        # La clé "citations" doit correspondre à celle du input.json
+        "citations": { 
+            
+            # Le conteneur pour UNE SEULE citation
+            "item_selector": "div.quote",
+            
+            # Les champs à l'intérieur de l'item_selector
+            "fields": {
+                "texte": "span.text",
+                "auteur": "small.author"
+            },
+            
+            # Le bouton pour la page suivante
+            "pagination_selector": "li.next > a"
+        }
+    }
+    
+    print("🗺️ Carte des sélecteurs (simulée quotes.toscrape) reçue.")
+    
+    # On filtre la carte pour ne renvoyer que ce qu'on a demandé
+    final_map = {k: v for k, v in full_mock_map.items() if k in schema}
+    return final_map
+
+def build_final_output(config: dict, cleaned_data: dict, quality_report: dict) -> dict:
+    metadata = config.get("metadata", {})
+    if "data-extraction" in metadata:
+        metadata["data-extraction"] = datetime.now().isoformat()
+    if "nb_resultats" in  metadata:
+        total_results = 0
+        for items in cleaned_data.values():
+            total_results += len(items)
+        metadata["nb_resultats"] = total_results
+
+    data_object = cleaned_data.copy()
+    data_object["metadata"] = metadata
+
+    final_report = {}
+    num_collections = len(quality_report)
+    if num_collections == 1:
+        final_report = list(quality_report.values())[0]
+    elif num_collections > 1:
+        final_report = quality_report.copy()
+        summary_total = 0
+        summary_complete = 0
+        for report in quality_report.values():
+            summary_total += report.get("total_items", 0)
+            summary_complete += report.get("complete_items", 0)
+
+        summary_rate = 0
+        if summary_total > 0:
+            summary_rate = round(summary_complete / summary_total, 3)
+
+        final_report["summary"] = {
+            "total_items": summary_total,
+            "complete_items": summary_complete,
+            "completion_rate": summary_rate
+        }
+
+    output = {
+        "status": "success",
+        "data" : data_object,
+        "quality_report": final_report
+    }
+    return output
+
+
+async def main():
+    server_path, input_path, output_path = args()
+
     client = MCPClient()
+
     try:
+        config = load_json_file(input_path)
+
         await client.connect(server_path, mode="python")
 
-        cfg = json.load(open(input_path, "r", encoding="utf-8"))
-        url = cfg["url"]
+        url = config['url']
         if not url or not isinstance(url, str):
             raise ValueError("Input JSON must contain a valid 'url' string")
-        interactions = cfg.get("interactions", [])
-        options = cfg.get("options", {})
+        
+        interactions = config.get("interactions", [])
+        options = config.get("options", {})
 
         # Démo minimale : navigate → screenshot → get_html
         print(f"\n🌍 navigate {url}")
-        res = await client.call("tool_navigate", {"url": url})
-        print(json.dumps(tool_result_to_dict(res), indent=2))
+        res = await call_json(client, "tool_navigate", {"url": url})
+        print(json.dumps(res, indent=2))
 
         print("\n▶️ run interactions")
-        r = await run_flow(client.session, interactions)
+        r = await run_flow(client, interactions)
         print(json.dumps(r, indent=2))
         if not r.get("ok"):
             raise RuntimeError(r.get("error"))
 
         print("\n📄 get_html")
-        html_res = await client.call("tool_get_html", {})
-        payload = tool_result_to_dict(html_res)
-        html = payload_to_html(payload)
+        content = await call_json(client, "tool_get_html", {})
+        html = content_to_html(content)
         print("HTML length:", len(html))
 
-        if options.get("screenshot"):
-            snap_path = options.get("screenshot_path","after.png")
-            print("\n📸 screenshot")
-            snap = await client.call("tool_screenshot", {"path": snap_path, "full": False})
-            print(json.dumps(tool_result_to_dict(snap), indent=2))
+        schema_for_ia = {}
+        for name, schema in zip(config.get("collections_names", []), config.get("entity_schemas", [])):
+            schema_for_ia[name] = schema
+        
+        llm_map = await get_llm_map(client.session, schema_for_ia, html)
 
-        # Output minimal (on remplira plus tard avec data & quality_report)
-        out = {
-            "status": "success",
-            "url": url,
-            "interactions_done": len(interactions),
-            "html_length": len(html)
-        }
-        json.dump(out, open(output_path,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
-        print(f"\n✅ OK -> {output_path}")
+        all_clean_data = {}
+        all_reports = {}
+
+        for i, collection_name in enumerate(config.get("collections_names", [])):
+            collection_map = llm_map.get(collection_name, {})
+            if not collection_map:
+                print(f"⚠️ No LLM map found for collection '{collection_name}', skipping.")
+                continue
+
+            entity_schema = config.get("entity_schemas", [])[i]
+            print(f"\n run_scraping_loop for collection '{collection_name}'")
+            raw_data = await run_scraping_loop(client, collection_map, options)
+            print(f"Total items scraped for '{collection_name}': {len(raw_data)}")
+
+            print(f"\n🧹 process_scraped_data for collection '{collection_name}'")
+            clean_data, quality_report = process_scraped_data(raw_data, entity_schema)
+            print(json.dumps(quality_report, indent=2))
+
+            all_clean_data[collection_name] = clean_data
+            all_reports[collection_name] = quality_report
+
+        final_output = build_final_output(config, all_clean_data, all_reports)
+        print(f"\n💾 Saving output to {output_path}")
+
+        save_output(output_path, final_output)
+    
+    except Exception as e:
+        print("❌ Erreur lors de l'exécution de l'agent :", e)
+        save_output(output_path, {"status": "error", "message": str(e)})
 
     finally:
         print("\n🧹 Shutting down...")

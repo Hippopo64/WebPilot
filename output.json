@@ -1,6 +1,144 @@
 {
   "status": "success",
-  "url": "https://example.com",
-  "interactions_done": 1,
-  "html_length": 528
+  "data": {
+    "citations": [
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      },
+      {
+        "texte": null,
+        "auteur": null
+      }
+    ],
+    "metadata": {
+      "source": "quotes.toscrape",
+      "nb_resultats": 30
+    }
+  },
+  "quality_report": {
+    "total_items": 30,
+    "complete_items": 0,
+    "completion_rate": 0.0,
+    "missing_fields": [
+      "texte: 30 items",
+      "auteur: 30 items"
+    ],
+    "errors": [
+      "Field 'texte': missing",
+      "Field 'auteur': missing"
+    ]
+  }
 }

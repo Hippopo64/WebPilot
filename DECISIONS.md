@@ -143,6 +143,8 @@ on a parfois plusieurs meme boutons pour mobile et pour ordi donc ajout du first
 ajout du agent et agent.py, on décide de faire sans llm au debut pour tester facilement
 dans agent beaucoup d'ajout de fonctions utiles
 Pour convert on retourne un tuple car au debut on faisait des erreurs mais on veut pas arreter tout le programme du coup tuple, avec retour et none si bon et sinon none et l'erreur
+Peut gerer le cas ou y'a produits seul mais aussi chaussures et tee shirts, fonctions bien faites
+peut etre diviser en plusieurs fichiers avec types de fonctions ensembles
 
 
 **Auteur :** Hippolyte Dupont  

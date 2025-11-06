@@ -6,6 +6,8 @@ __pycache__/
 # Fichiers Playwright
 playwright-report/
 *.png
+*.html
+
 
 # pyenv
 .python-version

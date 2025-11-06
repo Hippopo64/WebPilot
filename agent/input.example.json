@@ -1,7 +1,19 @@
 {
-  "url": "https://example.com",
-  "interactions": [
-    { "type": "wait", "ms": 500 }
-  ],
-  "options": { "screenshot": true, "screenshot_path": "after.png" }
+    "url": "https://quotes.toscrape.com/",
+    "schema": {
+        "citations": {
+            "texte": "string",
+            "auteur": "string"
+        },
+        "metadata": {
+            "source": "quotes.toscrape",
+            "nb_resultats": 0
+        }
+    },
+    "interactions": [],
+    "options": {
+        "pagination": true,
+        "max_pages": 3,
+        "retry_failed": true
+    }
 }
