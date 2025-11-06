@@ -141,6 +141,8 @@ J'ajoute au fur et a mesur :
 probleme quand on clique sur qqch de pas visible, on le gere bien dans tools.py mais du coup leve une erreur et le serveur accepte pas le serreurs et plante. Donc on ajoute des try partout.
 on a parfois plusieurs meme boutons pour mobile et pour ordi donc ajout du first dans click et fill
 ajout du agent et agent.py, on décide de faire sans llm au debut pour tester facilement
+dans agent beaucoup d'ajout de fonctions utiles
+Pour convert on retourne un tuple car au debut on faisait des erreurs mais on veut pas arreter tout le programme du coup tuple, avec retour et none si bon et sinon none et l'erreur
 
 
 **Auteur :** Hippolyte Dupont  
