@@ -130,8 +130,7 @@ uv run playwright install chromium
 
 ### 3. Exécution de l'Agent
 
-L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte. ;
-Commande pour lancer l'éxecution :
+L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte. Commande pour lancer l'éxecution :
 
 Bash
 
@@ -142,7 +141,7 @@ uv run python -m agent.main src/webpilot/server.py agent/input.json output.json
 
 ### 4. Exécution de la Démo (Partie 1)
 Pour exécuter le scénario de test simple requis par la Partie 1 du test technique (naviguer sur example.com , prendre un screenshot , et extraire les liens ), vous pouvez lancer le script de démonstration dédié.
-Ce script n'utilise pas l'IA ; il appelle directement les outils du serveur MCP.
+Ce script n'utilise pas l'IA, il appelle directement les outils du serveur MCP.
 
 Bash
 
