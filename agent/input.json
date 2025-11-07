@@ -8,12 +8,14 @@
       }
     ],
     "metadata": {
-      "date_extraction": "datetime"
+      "date_extraction": "datetime",
+      "nb_resultats": "number"
     }
   },
   "interactions": [],
   "options": {
-    "pagination": false,
-    "max_pages": 1
+    "pagination": true,
+    "max_pages": 3,
+    "retry_failed": true
   }
 }
