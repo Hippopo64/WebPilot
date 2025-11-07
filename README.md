@@ -133,7 +133,20 @@ Bash
 
 ```
 
-### 4. Fichiers
+### 4. Exécution de la Démo (Partie 1)
+Pour exécuter le scénario de test simple requis par la Partie 1 du test technique (naviguer sur example.com , prendre un screenshot , et extraire les liens ), vous pouvez lancer le script de démonstration dédié.
+Ce script n'utilise pas l'IA ; il appelle directement les outils du serveur MCP.
+
+Bash
+
+```
+# Lancer la démo de la Partie 1
+uv run python src/webpilot/demos/demo_scenario.py
+Les fichiers de sortie (captures d'écran, HTML) seront générés dans le dossier demo_outputs/
+
+```
+
+### 5. Fichiers
 
 -   `agent/input.json`: Fichier d'exemple d'input. Modifiez-le pour définir le site et le schéma que vous souhaitez scraper.
     
