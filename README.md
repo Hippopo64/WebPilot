@@ -1,6 +1,6 @@
 # WebPilot MCP – Agent de Scraping Autonome via IA
 
-Ce projet a été réalisé dans le cadre du test technique pour le poste de **Développeur Full-Stack IA** chez **TW3 Partners**.
+Ce projet a été réalisé dans le cadre du test technique pour le poste de Développeur Full-Stack IA chez TW3 Partners.
 
 Il se compose de deux parties principales :
 
