@@ -1,23 +1,26 @@
 {
-  "url": "https://www.ldlc.com/informatique/ordinateur-portable/pc-portable/c4265/",
+  "url": "https://quotes.toscrape.com/",
   "schema": {
-    "products": [
+    "citations": [
       {
-        "marque": "string",
-        "nom_produit": "string",
-        "prix_ttc": "string"
+        "texte": "string",
+        "auteur": "string",
+        "tags": [
+          {
+            "nom_tag": "string"
+          }
+        ]
       }
     ],
     "metadata": {
-      "date_extraction": "datetime"
+      "date_extraction": "datetime",
+      "nb_resultats": "number"
     }
   },
-  "interactions": [
-    {"type": "click", "selector": "#accept-cookies"}
-  ],
+  "interactions": [],
   "options": {
-    "pagination": false,
-    "max_pages": 1,
-    "retry_failed": true 
+    "pagination": true,
+    "max_pages": 2,
+    "retry_failed": false 
   }
 }
