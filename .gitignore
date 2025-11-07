@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .env
+.vscode/
 
 # Fichiers Playwright
 playwright-report/
@@ -13,7 +14,6 @@ output.json
 
 
 # pyenv
-.python-version
 .pyenv/
 .venv/
 
