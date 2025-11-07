@@ -110,13 +110,20 @@ La méthode la plus simple est souvent via pip :
 
 **Une fois `uv` installé :**
 
+
+# 1. Installer les dépendances Python (dont mcp, playwright, litellm)
+
 Bash
 
 ```
-# 1. Installer les dépendances Python (dont mcp, playwright, litellm)
 uv sync
 
+```
 # 2. Installer le navigateur Chromium pour Playwright
+
+Bash
+
+```
 uv run playwright install chromium
 
 ```
@@ -128,7 +135,6 @@ L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte
 Bash
 
 ```
-# Syntaxe :
 uv run python -m agent.main src/webpilot/server.py agent/input.json output.json
 
 ```
@@ -140,7 +146,6 @@ Ce script n'utilise pas l'IA ; il appelle directement les outils du serveur MCP.
 Bash
 
 ```
-# Lancer la démo de la Partie 1
 uv run python src/webpilot/demos/demo_scenario.py
 Les fichiers de sortie (captures d'écran, HTML) seront générés dans le dossier demo_outputs/
 
