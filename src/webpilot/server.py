@@ -15,6 +15,7 @@ from webpilot import tools as T
 from webpilot.llm_tools import generate_selectors
 
 # ------------- Logging (recommandé par MCP) : vers STDERR -------------
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # Réduit le bruit d'asyncio
 logger = logging.getLogger("webpilot.fastmcp")
 logger.setLevel(logging.INFO)
 if not logger.handlers:

@@ -90,11 +90,12 @@ async def _run() -> None:
         print("\n🧹 Shutting down...")
         try:
             await client.close()
-        except Exception as e:
-            if "event loop is closed" in str(e).lower() or "bad file descriptor" in str(e).lower():
+        except Exception as close_e:
+            err_str = str(close_e).lower()
+            if "event loop is closed" in err_str or "bad file descriptor" in err_str:
                 pass # Ignorer le bruit de fermeture
-        else:
-            print("⚠️ Erreur lors de la fermeture du client :", e)
+            else:
+                print("⚠️ Erreur lors de la fermeture du client :", close_e)
 
 
 
