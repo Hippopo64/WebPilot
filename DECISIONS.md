@@ -146,6 +146,8 @@ Pour convert on retourne un tuple car au debut on faisait des erreurs mais on ve
 Peut gerer le cas ou y'a produits seul mais aussi chaussures et tee shirts, fonctions bien faites
 peut etre diviser en plusieurs fichiers avec types de fonctions ensembles
 le wait du click dans tools déplacé dans server pour vérifier et wait que si c'est bon
+On peut avoir plus d'attributs que demandé
+on utilise groq
 
 
 **Auteur :** Hippolyte Dupont  
