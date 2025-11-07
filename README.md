@@ -1,90 +1,156 @@
-# 🧠 WebPilot MCP – Automatisation de navigateur via IA
+# WebPilot MCP – Agent de Scraping Autonome via IA
 
-Ce projet a été réalisé dans le cadre du test technique pour le poste de **Développeur Full-Stack IA** chez **TW3 Partners**.  
-Il illustre un petit **serveur MCP (Model Context Protocol)** exposant des outils d’automatisation de navigateur à l’aide de **Playwright**.  
-Ces outils permettent à un modèle (ou à un agent IA) de naviguer sur le web, d’extraire des liens, de remplir des formulaires, de cliquer sur des éléments et de prendre des captures d’écran.
+Ce projet a été réalisé dans le cadre du test technique pour le poste de **Développeur Full-Stack IA** chez **TW3 Partners**.
 
----
+Il se compose de deux parties principales :
 
-## 🚀 Fonctionnalités principales
+1.  Un **Serveur MCP** : Construit avec **FastMCP** et **Playwright**, il expose des outils de bas niveau pour contrôler un navigateur (cliquer, naviguer, scraper).
+    
+2.  Un **Agent IA** : Un agent Python asynchrone qui utilise le serveur MCP pour exécuter des tâches de scraping complexes. Il reçoit un **schéma JSON** en entrée, utilise une IA (via **LiteLLM**) pour générer un plan d'extraction, et pilote le navigateur pour extraire les données. Il est capable d'extraire **plusieurs collections de données** (ex: "tee-shirts", "pantalons" et "avis") en un seul passage, de manière récursive et paginée.
+    
 
-| Outil | Description |
-|--------|-------------|
-| `navigate(url)` | Ouvre une URL dans le navigateur partagé. |
-| `screenshot(path, full)` | Prend une capture d’écran (fenêtre ou page complète). |
-| `extract_links(contains)` | Extrait tous les liens présents sur la page. |
-| `fill(selector, text)` | Remplit un champ de formulaire identifié par un sélecteur CSS. |
-| `click(selector)` | Clique sur un élément cliquable. |
-| `get_html(save_path)` | Récupère le HTML rendu, avec option d’enregistrement. |
+----------
 
-Tous les outils renvoient des réponses **JSON structurées** (`ok`, `error`, `details`, etc.) et journalisent leurs actions via `logging`.
+## Fonctionnalités principales
 
----
+### Agent
 
-## 🧩 Architecture du projet
+L'agent est le cœur du projet et gère l'ensemble du processus d'extraction de données.
 
-src/
-└── webpilot/
-├── browser.py # Gestion du navigateur Playwright (async singleton)
-├── tools.py # Définition des outils exposés
-├── server.py # Serveur MCP FastMCP exposant les tools
-└── demos/
-└── demo_scenario.py # Scénario de démonstration automatisé
+-   **Analyse IA Dynamique** : Utilise `litellm` pour appeler un LLM afin d'analyser le HTML et de le mapper au schéma JSON fourni par l'utilisateur.
+    
+-   **Génération de "Map" de Sélecteurs** : Crée dynamiquement une carte JSON de sélecteurs CSS pour _chaque_ champ requis, y compris les champs imbriqués.
+    
+-   **Scraping Récursif** : Gère les structures de données imbriquées (ex: une `citation` qui contient une _liste_ de `tags`).
 
+- **Scraping Multi-Collection** : Capacité à scraper **plusieurs** types de données (ex: `citations` et `top_tags`, ou `tee-shirts`, `pantalons`, `pulls`) simultanément sur _chaque_ page, au lieu de devoir relancer un script pour chaque item. L'agent scrape tout ce qui est défini dans le schéma avant de passer à la page suivante.
+    
+-   **Logique "par Page"** : Scrape _toutes_ les collections demandées (ex: `citations` et `top_tags`) sur la page actuelle avant de passer à la suivante.
+    
+-   **Pagination Automatique** : Détecte et clique sur les boutons "Page Suivante" en utilisant une liste de sélecteurs génériques.
+    
+-   **Nettoyage & Validation** : Convertit, nettoie et valide automatiquement les données brutes (chaînes, nombres, dates) en fonction du type spécifié dans le schéma.
+    
+-   **Rapport de Qualité** : Génère un `quality_report` détaillé avec le taux de complétion, les champs manquants et les erreurs pour chaque collection.
+    
 
-- Le serveur utilise **FastMCP SDK** pour exposer les outils via le protocole **MCP (stdio)**.  
-- Le navigateur est partagé entre les outils pour éviter les redémarrages coûteux.  
-- Les logs sont envoyés vers `stderr` pour une observation simple et claire.
+### Serveur
 
----
+Le serveur MCP fournit les outils de bas niveau que l'agent utilise pour interagir avec le web.
 
-## ⚙️ Installation et exécution
+|**Outil**|**Description**|
+| :--------------- |:---------------|
+|`tool_navigate(url)`|Ouvre une URL dans le navigateur partagé.
+|` tool_click(selector)`|Clique sur un élément cliquable.
+|` tool_fill(selector, text)`|Remplit un champ de formulaire.
+|`tool_get_html(save_path)`|Récupère le HTML rendu de la page et peut le sauvegarder.
+|`tool_scrape_elements(selector, attribute, max_items)`|Extrait le texte ou les attributs d'un ou plusieurs éléments.
+|`tool_screenshot(path, full)`|Prend une capture d’écran. On peut spécifier si on souhaite toute la page.
+|` tool_scroll(direction, amount, px)`|Fait défiler la page dans la direction souhaitée et du nombre de pixels souhaités.
+|`tool_extract_links(contains)`|Extrait tous les liens de la page. On peut filtrer par lien contenant un mot spécifique.
 
-### 1. Installer les dépendances
-```bash```
+----------
+
+## Architecture du projet
+
+Le projet est divisé en deux modules principaux : le **Serveur** (`src/webpilot`) et l'**Agent** (`agent/`). L'agent est conçu de manière modulaire pour séparer les responsabilités.
+
+### Agent (`agent/`)
+
+-   `main.py`: Point d'entrée principal. Orchestre la logique de scraping par page.
+
+-   `client.py`: Gère la connexion et la communication avec le serveur MCP.
+    
+-   `config.py`: Charge et valide le fichier `input.json` (URL, schéma, options).
+    
+-   `llm_map.py`: Construit le prompt dynamique, appelle le LLM (via `litellm`), et renvoie la carte des sélecteurs css.
+    
+-   `scraper.py`: Contient la logique de scraping récursive (`_scrape_item_recursive`) qui gère l'imbrication.
+    
+-   `pagination.py`: Gère la détection et le clic sur le bouton "Page Suivante".
+    
+-   `flow.py`: Gère l'exécution des interactions utilisateur (clics, remplissage de formulaires) avant le scraping.
+    
+-   `processing.py`: Contient toute la logique de nettoyage (`clean_item_data`) et de conversion de types (`convert_value`).
+    
+-   `reporting.py`: Construit le `output.json` final.
+    
+
+### Serveur (`src/webpilot/`)
+
+-   `server.py`: Le serveur FastMCP qui expose les outils via `stdio`.
+    
+-   `tools.py`: L'implémentation Playwright de chaque outil.
+    
+-   `browser.py`: Gère le démarrage et l'arrêt du navigateur Playwright.
+    
+
+----------
+
+## Installation et Exécution
+
+### 1. Variables d'Environnement
+
+Ce projet utilise **LiteLLM** pour se connecter à un service d'IA. Vous devez fournir votre clé API. Je recommande d'utiliser Groq. L'agent est fait de manière à d'analyser le HTML à _chaque chargement de page_. La vitesse d'inférence est donc cruciale. Groq utilise des LPU pour fournir des modèles à une vitesse quasi-instantanée, ce qui rend l'agent extrêmement réactif.
+
+Créez un fichier `.env` à la racine du projet :
+
+Extrait de code
+
+```
+# Exemple pour Groq
+GROQ_API_KEY=sk-VotreCleApiIci
+
+```
+
+### 2. Installation
+Ce projet utilise `uv` pour la gestion de l'environnement et des dépendances, car il est extrêmement rapide.
+Si vous n'avez pas uv, vous pouvez l'installer en suivant les instructions officielles : https://docs.astral.sh/uv/getting-started/installation/
+La méthode la plus simple est souvent via pip :
+
+**Une fois `uv` installé :**
+
+Bash
+
+```
+# 1. Installer les dépendances Python (dont mcp, playwright, litellm)
 uv sync
 
-2. Installer le navigateur Playwright
+# 2. Installer le navigateur Chromium pour Playwright
 uv run playwright install chromium
 
-3. Lancer le serveur en mode développement (inspecteur MCP)
-uv run mcp dev src/webpilot/server.py
+```
 
-4. Lancer la démonstration automatique
-uv run python -m webpilot.demos.demo_scenario
+### 3. Exécution de l'Agent
 
+L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte.
 
-Les fichiers générés se trouvent dans demo_outputs/ :
+Bash
 
-00_example_viewport.png
+```
+# Syntaxe :
+# uv run python agent/agent.py [chemin_serveur] [input.json] [output.json]
 
-01_external_full.png
+```
 
-01_external.html
+### 4. Fichiers
 
-🧪 Exemple de déroulement
+-   `agent/input.json`: Fichier d'exemple d'input. Modifiez-le pour définir le site et le schéma que vous souhaitez scraper.
+    
+-   `output.json`: Le fichier de sortie contenant les données extraites et le rapport de qualité.
+    
 
-navigate → https://example.com
+----------
 
-screenshot → example_viewport.png
+## Stack Technique
 
-extract_links
-
-navigate vers le premier lien externe
-
-screenshot → external_full.png
-
-🧱 Stack technique
-
-Python 3.10+
-
-Playwright (API asynchrone)
-
-Model Context Protocol (FastMCP SDK)
-
-uv (gestionnaire de dépendances)
-
-logging (suivi des actions)
+-   **Python 3.10+**
+    
+-   **Agent (IA)**: `litellm` (pour les appels LLM), `python-dotenv` (gestion des clés)
+    
+-   **Serveur (Outils)**: `Playwright` (contrôle du navigateur), `mcp[cli]` (protocole de communication)
+    
+-   **Gestion de projet**: `uv` (gestion des dépendances et de l'environnement)
 
 
 # Architecture Cloud Azure – Présentation & Justification
@@ -205,6 +271,31 @@ L’exécution du scraping et du traitement IA se déroule dans AKS, qui est cap
 Les données sont stockées dans des services sécurisés (Redis, PostgreSQL, Blob) accessibles via Private Endpoints, et les sorties Internet sont contrôlées par le firewall.  
 Puis, le tout est contrôlé par Monitor et Sentinel qui offrent une traçabilité complète et un respect des normes RGPD et ISO 27001.
 
-📦 Licence
 
-MIT – usage démonstratif et éducatif.
+## Analyse et Améliorations Possibles
+
+L'agent fonctionne très bien, mais le scraping à grande échelle nécessite de gérer deux défis : la fiabilité de l'IA et les mesures anti-bot.
+
+### 1. Fiabilité de l'IA (Sélecteurs CSS)
+
+-   **Problème :** L'IA peut "halluciner" et fournir des sélecteurs fragiles (`div:nth-child(3)`) sur des sites complexes.
+    
+-   **Solutions :**
+    
+    -   **Auto-Correction (Self-Healing) :** Si un sélecteur échoue (`null` ou `[]`), l'agent pourrait automatiquement redemander à l'IA un _nouveau_ sélecteur pour ce champ spécifique. Mais cela rajoute des coûts d'utilisation.
+        
+    -   **Vision (Multimodal) :** Utiliser un `screenshot` avec le `HTML` et un modèle **vision** pour trouver les sélecteurs visuellement, ce qui est souvent plus fiable que l'analyse de HTML.
+        
+
+### 2. Protections Anti-Scraping
+
+-   **Problème :** La plupart des sites bloquent les scripts.
+    
+-   **Solutions :**
+    
+    -   **Rotation de Proxy :** Utiliser des services de proxy pour que chaque requête vienne d'une IP différente.
+        
+    -   **Résolveurs de CAPTCHA :** Détecter les CAPTCHAs et envoyer l'image à un service tiers pour résolution avant de `remplir` le formulaire.
+        
+    -   **"Humanisation" :** Ajouter des délais aléatoires et simuler des mouvements de souris avant de `cliquer` pour paraître moins robotique.
+
