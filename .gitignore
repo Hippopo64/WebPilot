@@ -5,6 +5,7 @@ __pycache__/
 .env
 .vscode/
 
+
 # Fichiers Playwright
 playwright-report/
 *.png
