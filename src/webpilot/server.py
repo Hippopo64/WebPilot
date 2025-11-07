@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 # Tes modules
 from webpilot.browser import start_browser, stop_browser
 from webpilot import tools as T
+from webpilot.llm_tools import generate_selectors
 
 # ------------- Logging (recommandé par MCP) : vers STDERR -------------
 logger = logging.getLogger("webpilot.fastmcp")
@@ -195,6 +196,24 @@ async def tool_scrape_elements(selector: str, attribute: str | None = None, max_
         res = {"ok": False, "error": "unable to scrape", "details": str(e), "url": page.url}
     logger.info(f"scrape ok={res.get('ok')} selector={selector} attribute={attribute} max_items={max_items}")
     return res
+
+@mcp.tool()
+async def tool_generate_selectors(schema: dict, html: str) -> dict:
+    """
+    This tool analyzes HTML and a schema to generate CSS selectors using an AI.
+    Args:
+        schema (dict): The JSON schema for data extraction.
+        html (str): The HTML content of the page.
+    Returns:
+        dict: A dictionary containing the selector map or an error.
+    """
+    try:
+        res = await generate_selectors(schema, html)
+    except Exception as e:
+        res = {"ok": False, "error": "unable to generate selectors", "details": str(e)}
+    logger.info(f"generate_selectors ok={res.get('ok')}")
+    return res
+
 
 # ------------- Points d'entrée -------------
 def main_stdio():

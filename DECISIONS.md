@@ -148,6 +148,7 @@ peut etre diviser en plusieurs fichiers avec types de fonctions ensembles
 le wait du click dans tools déplacé dans server pour vérifier et wait que si c'est bon
 On peut avoir plus d'attributs que demandé
 on utilise groq
+on ajoute llm comme tool mcp jsp pourquoi
 
 
 **Auteur :** Hippolyte Dupont  

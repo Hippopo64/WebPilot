@@ -1,0 +1,19 @@
+{
+  "url": "https://quotes.toscrape.com/",
+  "schema": {
+    "citations": [
+      {
+        "texte": "string",
+        "auteur": "string"
+      }
+    ],
+    "metadata": {
+      "date_extraction": "datetime"
+    }
+  },
+  "interactions": [],
+  "options": {
+    "pagination": false,
+    "max_pages": 1
+  }
+}

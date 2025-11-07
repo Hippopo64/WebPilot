@@ -1,6 +1,8 @@
 from mcp import ClientSession
 from typing import Optional, Tuple, List, Any, Dict
 
+from agent.io_client import call_json
+
 
 GENERIC_NEXT_SELECTORS: List[str] = [
     "a[rel='next']",
@@ -41,39 +43,59 @@ async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
     Returns:
         dict: The extracted LLM map.
     """
-    full_mock_map = {
+    # full_mock_map = {
         
-        "citations": { 
-            "item_selector": "div.quote",
-            "fields": {
-                "texte": "span.text",
-                "auteur": "small.author",
-                "tags": { 
-                    "item_selector": "a.tag",
-                    "fields": { "nom_tag": "@self" }
-                }
-            },
-            "pagination_selector": "li.next > a"
-        },
+    #     "citations": { 
+    #         "item_selector": "div.quote",
+    #         "fields": {
+    #             "texte": "span.text",
+    #             "auteur": "small.author",
+    #             "tags": { 
+    #                 "item_selector": "a.tag",
+    #                 "fields": { "nom_tag": "@self" }
+    #             }
+    #         },
+    #         "pagination_selector": "li.next > a"
+    #     },
         
-        # --- CORRECTION 3 : Le sélecteur pour top_tags ---
-        "top_tags": {
-            # On sélectionne le CONTENEUR du tag
-            "item_selector": "span.tag-item", 
-            "fields": {
-                # ET ENSUITE on cherche le tag à l'intérieur
-                "nom_tag": "a.tag" 
-            },
-            "pagination_selector": None
-        }
-        # --- FIN CORRECTION 3 ---
-    }
+    #     # --- CORRECTION 3 : Le sélecteur pour top_tags ---
+    #     "top_tags": {
+    #         # On sélectionne le CONTENEUR du tag
+    #         "item_selector": "span.tag-item", 
+    #         "fields": {
+    #             # ET ENSUITE on cherche le tag à l'intérieur
+    #             "nom_tag": "a.tag" 
+    #         },
+    #         "pagination_selector": None
+    #     }
+    #     # --- FIN CORRECTION 3 ---
+    # }
+
+    try: 
+        tool_args = {"schema": schema, "html": html}
+
+        response = await call_json(session, "tool_generate_selectors", tool_args)
+
+        if response.get("ok"):
+            final_map = response.get("map", {})
+
+            filtered_map = {}
+            for k, v in final_map.items():
+                if k in schema:
+                    filtered_map[k] = v
+
+            return filtered_map
+        else:
+            print(f"⚠️ 'tool_generate_selectors' failed: {response.get('error', 'Invalid response')}")
     
-    print("🗺️ Carte des sélecteurs (simulée quotes.toscrape) reçue.")
+    except Exception as e:
+        print(f"❌ Error calling 'tool_generate_selectors': {e}")
     
-    # On filtre la carte pour ne renvoyer que ce qu'on a demandé
-    final_map = {k: v for k, v in full_mock_map.items() if k in schema}
-    return final_map
+    # print("🗺️ Carte des sélecteurs (simulée quotes.toscrape) reçue.")
+    
+    # # On filtre la carte pour ne renvoyer que ce qu'on a demandé
+    # final_map = {k: v for k, v in full_mock_map.items() if k in schema}
+    # return final_map
 
 
 def split_selector_attribute(selector: str) -> tuple[str, Optional[str]]:
