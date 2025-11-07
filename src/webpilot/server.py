@@ -216,9 +216,8 @@ async def tool_generate_selectors(schema: dict, html: str) -> dict:
     return res
 
 
-# ------------- Points d'entrée -------------
 def main_stdio():
-    """Exécute le serveur en STDIO (utile hors dev)."""
+    """Execute server in stdio mode"""
     try:
         mcp.run_stdio()
     finally:

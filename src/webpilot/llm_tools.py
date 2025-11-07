@@ -93,7 +93,7 @@ async def generate_selectors(schema: dict, html: str) -> dict:
     try:
         messages = _build_prompt_messages(schema, html)
         
-        print(f"🤖 [Server] Calling Groq ({GROQ_MODEL_ID}) via LiteLLM to generate selectors...")
+        print(f"[Server] Calling Groq ({GROQ_MODEL_ID}) via LiteLLM to generate selectors...")
         
         response = await litellm.acompletion(
             model=GROQ_MODEL_ID,
@@ -106,16 +106,16 @@ async def generate_selectors(schema: dict, html: str) -> dict:
         # Extract the JSON content from the response
         json_content = response.choices[0].message.content
         selector_map = json.loads(json_content)
-        
-        print("✅ [Server] Selector map generated successfully.")
-        
+
+        print("[Server] Selector map generated successfully.")
+
         # Return the result in MCP format
         return {"ok": True, "map": selector_map}
         
     except json.JSONDecodeError as e:
-        print(f"❌ [Server] Error: The AI did not return valid JSON. {e}")
+        print(f"[Server] Error: The AI did not return valid JSON. {e}")
         return {"ok": False, "error": f"The AI did not return valid JSON: {e}"}
     except Exception as e:
         # Handle LiteLLM/Groq API errors, timeouts, etc.
-        print(f"❌ [Server] Error during LiteLLM call: {e}")
+        print(f"[Server] Error during LiteLLM call: {e}")
         return {"ok": False, "error": f"Error calling AI: {str(e)}"}

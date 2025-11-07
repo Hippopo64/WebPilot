@@ -46,5 +46,4 @@ def save_output(path: str, data: dict):
 
 
 def content_to_html(content: dict) -> str:
-    # get_html peut renvoyer "html" ou "content" selon ta version serveur
     return content.get("html") or content.get("content") or ""

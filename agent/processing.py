@@ -139,7 +139,7 @@ def clean_item_data(raw_node: dict, schema_node: dict, path_prefix: str = "") ->
 
     return cleaned, error_list
 
-# --- Rapport global ---
+
 def process_scraped_data(raw_data: list[dict], entity_schema: dict) -> tuple[list[dict], dict]:
     """
     Process the raw scraped data according to the entity schema.

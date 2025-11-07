@@ -21,9 +21,6 @@ async def scrape_item_recursive(session: ClientSession, base_selector: str, fiel
     for field, selector in field_map.items():
         if isinstance(selector, str):
             simple_fields[field] = selector
-
-    # simple_fields = {f: s for f, s in field_map.items() if isinstance(s, str)}
-    # nested_fields = {f: s for f, s in field_map.items() if isinstance(s, dict)}
     
     for field, selector in simple_fields.items():
         sel_css, attr = split_selector_attribute(selector)
