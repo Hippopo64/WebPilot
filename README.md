@@ -41,7 +41,7 @@ src/
 ## ⚙️ Installation et exécution
 
 ### 1. Installer les dépendances
-```bash
+```bash```
 uv sync
 
 2. Installer le navigateur Playwright
