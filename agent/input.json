@@ -1,26 +1,22 @@
 {
-    "url": "https://quotes.toscrape.com/",
-    "schema": {
-        "citations": {
-            "texte": "string",
-            "auteur": "string",
-            "tags": [
-                {
-                    "nom_tag": "string"
-                }
-            ]
-        },
-        "top_tags": {
-            "nom_tag": "string"
-        },
-        "metadata": {
-            "date_extraction": "datetime",
-            "nb_resultats": "number"
-        }
-    },
-    "interactions": [],
-    "options": {
-        "pagination": true,
-        "max_pages": 2
+  "url": "https://books.toscrape.com/",
+  "schema": {
+    "products": [
+      {
+        "titre": "string",
+        "prix": "string",
+        "note_etoiles": "string",
+        "lien_produit": "string"
+      }
+    ],
+    "metadata": {
+      "date_extraction": "datetime"
     }
+  },
+  "interactions": [],
+  "options": {
+    "pagination": true,
+    "max_pages": 3, 
+    "retry_failed": true
+  }
 }

@@ -86,7 +86,7 @@ async def click(page, selector: str) -> dict:
         target_loc = loc.filter(visible=True).first
         await target_loc.wait_for(state='visible', timeout=8000)
         try:
-            async with page.expect_navigation(wait_until="load", timeout=5000):
+            async with page.expect_navigation(wait_until="load", timeout=500):
                 await target_loc.click()
         except Exception as nav_e:
             if "timeout" not in str(nav_e).lower():
