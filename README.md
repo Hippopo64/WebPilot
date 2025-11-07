@@ -272,6 +272,8 @@ L’exécution du scraping et du traitement IA se déroule dans AKS, qui est cap
 Les données sont stockées dans des services sécurisés (Redis, PostgreSQL, Blob) accessibles via Private Endpoints, et les sorties Internet sont contrôlées par le firewall.  
 Puis, le tout est contrôlé par Monitor et Sentinel qui offrent une traçabilité complète et un respect des normes RGPD et ISO 27001.
 
+Pour que l'architecture cloud proposée soit fonctionnelle, le microservice WebPilot doit logiquement être exécuté en mode SSE (HTTP). Cela signifie simplement d'encapsuler notre serveur FastMCP dans une application web (comme Starlette) et de l'exposer avec un serveur ASGI (comme Uvicorn) pour qu'il puisse recevoir les requêtes réseau de l'APIM.
+
 
 ## Analyse et Améliorations Possibles
 
