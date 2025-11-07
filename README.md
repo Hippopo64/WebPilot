@@ -193,6 +193,7 @@ Elle repose sur un modèle de **microservices** déployés dans **Azure Kubernet
 
 -   **Microsoft Sentinel**
 
+![logo](Azure_Architecture.png)
 
 # 1. Vue d’ensemble du flux utilisateur
 
