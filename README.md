@@ -130,8 +130,8 @@ uv run playwright install chromium
 
 ### 3. Exécution de l'Agent
 
-L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte.
-Commande pour lancer l'éxecution
+L'agent pilote tout. Il démarre le serveur MCP en arrière-plan et s'y connecte. ;
+Commande pour lancer l'éxecution :
 
 Bash
 
