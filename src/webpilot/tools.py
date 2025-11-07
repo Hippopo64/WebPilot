@@ -84,7 +84,7 @@ async def click(page, selector: str) -> dict:
     try:
         loc = page.locator(selector)
         target_loc = loc.filter(visible=True).first
-        await target_loc.wait_for(state='visible', timeout=8000)
+        await target_loc.wait_for(state='visible', timeout=500)
         try:
             async with page.expect_navigation(wait_until="load", timeout=500):
                 await target_loc.click()

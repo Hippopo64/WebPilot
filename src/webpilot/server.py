@@ -1,4 +1,3 @@
-# src/webpilot/server.py
 from datetime import datetime
 import sys
 import logging
@@ -9,31 +8,30 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-# Tes modules
 from webpilot.browser import start_browser, stop_browser
 from webpilot import tools as T
 from webpilot.llm_tools import generate_selectors
 
-# ------------- Logging (recommandé par MCP) : vers STDERR -------------
-logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # Réduit le bruit d'asyncio
+# Configuration of logging
+logging.getLogger('asyncio').setLevel(logging.CRITICAL)  # avoid asyncio debug logs
 logger = logging.getLogger("webpilot.fastmcp")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     logger.addHandler(StreamHandler(sys.stderr))
 
-# ------------- État navigateur partagé (1 browser / 1 page) -------------
+# initialize browser/page variables
 P = BROWSER = PAGE = None
 
+#ensure browser is started
 async def ensure_page():
-    """Démarre Playwright une fois et réutilise la même page ensuite."""
     global P, BROWSER, PAGE
     if PAGE is None:
         P, BROWSER, PAGE = await start_browser()
         logger.info("browser_started")
     return PAGE
 
+# graceful shutdown
 async def shutdown():
-    """Arrêt propre quand le serveur se termine."""
     global P, BROWSER, PAGE
     try:
         await stop_browser(P, BROWSER)
@@ -41,7 +39,7 @@ async def shutdown():
     finally:
         P = BROWSER = PAGE = None
 
-# ------------- Déclaration du serveur MCP (FastMCP) -------------
+# Define FastMCP server and tools
 mcp = FastMCP("webpilot-mcp")
 
 @mcp.tool()
@@ -201,7 +199,7 @@ async def tool_scrape_elements(selector: str, attribute: str | None = None, max_
 @mcp.tool()
 async def tool_generate_selectors(schema: dict, html: str) -> dict:
     """
-    This tool analyzes HTML and a schema to generate CSS selectors using an AI.
+    This function uses LiteLLM to generate CSS selectors based on the provided schema and HTML snippet.
     Args:
         schema (dict): The JSON schema for data extraction.
         html (str): The HTML content of the page.
@@ -223,15 +221,12 @@ def main_stdio():
     finally:
         asyncio.run(shutdown())
 
-# Pour `uv run mcp dev src/webpilot/server.py` :
-# Le CLI `mcp dev` importe ton module et attend que tu lui donnes un serveur FastMCP.
-# On expose simplement l'objet `mcp` + un hook `__getattr__` si nécessaire.
+# Hook for attribute access
 def __getattr__(name: str):
-    # Certains wrappers recherchent `app`/`server`. On renvoie mcp dans ces cas.
+    # Expose app and server for uvicorn
     if name in {"app", "server"}:
         return mcp
     raise AttributeError(name)
 
 if __name__ == "__main__":
-    # Lancement “direct” (facultatif) : uv run python -m webpilot.server
     mcp.run()

@@ -4,22 +4,21 @@ import json
 from dotenv import load_dotenv
 
 # Load environment variables (e.g., GROQ_API_KEY) from .env
-# Il va trouver le .env qui est à la racine WebPilot/
 load_dotenv()
 
 # Configure LiteLLM to be quieter
 litellm.set_verbose_logger = False
 
-# The model we are using, based on the free limits you found
+# Model we use
 GROQ_MODEL_ID = "groq/llama-3.3-70b-versatile"
 
 
 def _build_prompt_messages(schema: dict, html_snippet: str) -> list:
-    """Builds the prompt messages for the AI."""
+    """
+    Builds the prompt messages for the AI.
+    """
     
-    # We only provide a snippet of the HTML.
-    # The token-per-minute limit is 12K. We aim for ~8K tokens for the HTML
-    # (around 16000-24000 characters) to keep a safe margin.
+    # We limit the HTML snippet length to avoid excessive input size and token usage
     max_html_len = 20000 
     if len(html_snippet) > max_html_len:
         html_snippet = html_snippet[:max_html_len] + "..."
@@ -75,16 +74,18 @@ def _build_prompt_messages(schema: dict, html_snippet: str) -> list:
         {"role": "user", "content": user_prompt}
     ]
 
-#
-# THIS IS THE FUNCTION YOU NEED TO EXPOSE AS AN MCP TOOL
-#
+
 async def generate_selectors(schema: dict, html: str) -> dict:
     """
-    This is the function your MCP server will expose as 'tool_generate_selectors'.
-    It takes the 'schema' and 'html' sent by the agent client.
+    This function uses LiteLLM to generate CSS selectors based on the provided schema and HTML snippet.
+    Args:
+        schema (dict): The JSON schema for data extraction.
+        html (str): The HTML content of the page.
+    Returns:
+        dict: A dictionary containing the selector map or an error.
     """
     
-    # Simple argument validation
+    # Verify inputs
     if not isinstance(schema, dict) or not schema:
         return {"ok": False, "error": "Invalid or missing schema"}
     if not isinstance(html, str) or not html.strip():
@@ -95,12 +96,13 @@ async def generate_selectors(schema: dict, html: str) -> dict:
         
         print(f"[Server] Calling Groq ({GROQ_MODEL_ID}) via LiteLLM to generate selectors...")
         
+        # Call LiteLLM's acompletion API
         response = await litellm.acompletion(
             model=GROQ_MODEL_ID,
             messages=messages,
-            response_format={"type": "json_object"}, # This is the structured output!
-            temperature=0.0, # We want a deterministic response
-            timeout=120 # Allow time for analysis
+            response_format={"type": "json_object"},
+            temperature=0.0, #we want a deterministic response
+            timeout=120 # allow time for analysis
         )
         
         # Extract the JSON content from the response
@@ -116,6 +118,5 @@ async def generate_selectors(schema: dict, html: str) -> dict:
         print(f"[Server] Error: The AI did not return valid JSON. {e}")
         return {"ok": False, "error": f"The AI did not return valid JSON: {e}"}
     except Exception as e:
-        # Handle LiteLLM/Groq API errors, timeouts, etc.
         print(f"[Server] Error during LiteLLM call: {e}")
         return {"ok": False, "error": f"Error calling AI: {str(e)}"}

@@ -1,22 +1,23 @@
 {
-  "url": "https://books.toscrape.com/",
+  "url": "https://www.ldlc.com/informatique/ordinateur-portable/pc-portable/c4265/",
   "schema": {
     "products": [
       {
-        "titre": "string",
-        "prix": "string",
-        "note_etoiles": "string",
-        "lien_produit": "string"
+        "marque": "string",
+        "nom_produit": "string",
+        "prix_ttc": "string"
       }
     ],
     "metadata": {
       "date_extraction": "datetime"
     }
   },
-  "interactions": [],
+  "interactions": [
+    {"type": "click", "selector": "#accept-cookies"}
+  ],
   "options": {
-    "pagination": true,
-    "max_pages": 3, 
-    "retry_failed": true
+    "pagination": false,
+    "max_pages": 1,
+    "retry_failed": true 
   }
 }

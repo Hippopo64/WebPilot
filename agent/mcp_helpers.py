@@ -3,26 +3,31 @@ from mcp.types import TextContent, BlobResourceContents
 
 def tool_result_to_dict(res) -> dict:
     """
-    Convertit CallToolResult -> dict (ton payload).
-    Essaie d'abord TextContent (JSON dans .text), puis BlobContent 'application/json'.
-    Sinon, renvoie un dict brut avec le dump du contenu.
+    Convert CallToolResult to dict
+    Args:
+        res: CallToolResult
+    Returns:  
+        out: dict
     """
 
+    # Loop on contents to find JSON content
     for c in getattr(res, "content", []) or []:
-        # Cas le plus courant : FastMCP encode le dict en texte JSON
+        # If content is text 
         if isinstance(c, TextContent):
             t = c.text or ""
             try:
+                # Try to parse JSON
                 return json.loads(t)
             except Exception:
                 return {"text": t}
 
-        # Variante: contenu binaire JSON
+        # If content is binary with JSON mime type
         if isinstance(c, BlobResourceContents) and getattr(c, "mimeType", "") == "application/json":
             try:
                 return json.loads(c.data.decode("utf-8"))
             except Exception:
                 pass
-
-    # Fallback: on renvoie le modèle brut
-    return res.model_dump()
+    
+    # if content is not text or json encoded binary, return model dump to force a dict
+    out = res.model_dump()
+    return out

@@ -38,7 +38,7 @@ def convert_to_datetime(value: str):
 def clean_string(value: str) -> str:
     if value is None:
         return None
-    s = str(value).replace('\xa0', ' ').strip()
+    s = str(value).replace('\xa0', ' ').strip() # Replace non-breaking spaces
     if s != "":
         return s
     return None
@@ -88,39 +88,51 @@ def clean_item_data(raw_node: dict, schema_node: dict, path_prefix: str = "") ->
     cleaned = {}
     error_list = []
 
+    # Iterate over each field in the schema
     for field, expected_type in schema_node.items():
         if path_prefix:
             current_path = f"{path_prefix}.{field}"
         else:
             current_path = field
-        
+
+        # Get the raw value corresponding to the current field
         value = raw_node.get(field)
 
+        # Handle nested structures like {"bigfield": {"subfield1": "type1", "subfield2": "type2"}}
+        # If expected_type is a list
         if isinstance(expected_type, list):
             sub_node = value
+            # If the value is not a list, we wrap it in an empty list so we can still process
             if not isinstance(value, list):
                 sub_node = []
                 if value is None:
                     error_list.append(f"Field '{current_path}': missing")
                 else:
                     error_list.append(f"Field '{current_path}': expected list but got {type(value)}")
+            # tmp_cleaned will hold the cleaned sub-items
             tmp_cleaned = []
+            # loop over each item in the list and clean it according to the expected type
             for i in range(len(sub_node)):
+                # sub_cleaned is the cleaned item, sub_errors are the errors found in the sub-items
                 sub_cleaned, sub_errors = clean_item_data(sub_node[i], expected_type[0], f"{current_path}[{i}]")
-                tmp_cleaned.append(sub_cleaned)
-                error_list.extend(sub_errors)
+                tmp_cleaned.append(sub_cleaned) # add cleaned sub-item to the list
+                error_list.extend(sub_errors) # add any errors found to the main error list
             
+            # Assign the cleaned list to the main cleaned dict
             cleaned[field] = tmp_cleaned
 
+        # else if expected_type is a dict
         elif isinstance(expected_type, dict):
             sub_node = value
             if not isinstance(value, dict):
-                sub_node = {}
+                sub_node = {} 
                 if value is None:
                     error_list.append(f"Field '{current_path}': missing")
                 else:
                     error_list.append(f"Field '{current_path}': expected dict but got {type(value)}") 
 
+            # no loop here bc a dict contains field and object, so the recursive will handle all the objects
+            # with the main for loop above
             sub_cleaned, sub_errors = clean_item_data(sub_node, expected_type, current_path)
             cleaned[field] = sub_cleaned
             error_list.extend(sub_errors)
@@ -129,6 +141,7 @@ def clean_item_data(raw_node: dict, schema_node: dict, path_prefix: str = "") ->
             cleaned[field] = None
             error_list.append(f"Field '{current_path}': missing")
 
+        # else it is a type we can convert
         else:
             conv_value, error = convert_value(value, expected_type)
             if error:
@@ -157,7 +170,9 @@ def process_scraped_data(raw_data: list[dict], entity_schema: dict) -> tuple[lis
     error_fields = {}
     conversion_errors = []
 
+    # Process each item in the raw data
     for item in raw_data:
+        # Clean the item so it has all the types we are asking for
         cleaned_item, errors = clean_item_data(item, entity_schema)
         clean_data.append(cleaned_item)
         conversion_errors.extend(errors)

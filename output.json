@@ -364,7 +364,7 @@
       }
     ],
     "metadata": {
-      "date_extraction": "2025-11-07 03:43:47"
+      "date_extraction": "2025-11-07 17:09:31"
     }
   },
   "quality_report": {
@@ -378,10 +378,10 @@
       "lien_produit: 57 items"
     ],
     "errors": [
-      "Field 'titre': missing",
       "Field 'lien_produit': missing",
       "Field 'note_etoiles': missing",
-      "Field 'prix': missing"
+      "Field 'prix': missing",
+      "Field 'titre': missing"
     ]
   }
 }

@@ -4,6 +4,7 @@ from typing import Optional, Tuple, List, Any, Dict
 from agent.io_client import call_json
 
 
+#List of generic selectors to try for "next" pagination buttons/links
 GENERIC_NEXT_SELECTORS: List[str] = [
     "a[rel='next']",
     "[data-test-id*='pagination-next' i]",
@@ -45,14 +46,16 @@ async def get_llm_map(session: ClientSession, schema: dict, html: str) -> dict:
     """
 
     try: 
+        # Prepare tool arguments
         tool_args = {"schema": schema, "html": html}
 
-        response = await call_json(session, "tool_generate_selectors", tool_args)
+        response = await call_json(session, "tool_generate_selectors", tool_args) # Call the MCP tool to call llm
 
         if response.get("ok"):
             final_map = response.get("map", {})
 
             filtered_map = {}
+            # Filter to include only useful collections present in the schema
             for k, v in final_map.items():
                 if k in schema:
                     filtered_map[k] = v

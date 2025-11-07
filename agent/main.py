@@ -18,6 +18,7 @@ async def _run() -> None:
     server_path, input_path, output_path = args()
     client = MCPClient()
     try:
+        # Load the input and start server
         cfg = load_json_file(input_path)
         await client.connect(server_path, mode="python")
 
@@ -31,23 +32,31 @@ async def _run() -> None:
         if not r.get("ok", False):
             raise RuntimeError(r.get("error", "interactions failed"))
 
-        all_raw: Dict[str, List[dict]] = {name: [] for name in cfg["collections_names"]}
+        all_raw = {}
+        # Initialize empty lists for each collection
+        for name in cfg["collections_names"]:
+            all_raw[name] = []
+        
+
         options = cfg["options"]
         max_pages = int(options.get("max_pages", 1))
         use_pagination = bool(options.get("pagination", False))
         max_items_per_page = int(options.get("max_items_per_page", 500))
 
+        # Start scraping loop
         for page_i in range(max_pages):
             print(f"\nget_html for page {page_i+1}/{max_pages}")
             html_res = await call_json(client, "tool_get_html", {})
             html = content_to_html(html_res)
             print("HTML length:", len(html))
 
+            # schema for information extraction
             schema_for_ia = dict(zip(cfg["collections_names"], cfg["entity_schemas"]))
             llm_map = await get_llm_map(client, schema_for_ia, html)
 
+            # loop over collections
             for name in cfg["collections_names"]:
-                cmap = llm_map.get(name) or {}
+                cmap = llm_map.get(name) or {} # cmap is the LLM map for this collection
                 if not cmap:
                     print(f"No LLM map for '{name}', skipping.")
                     continue
@@ -60,15 +69,19 @@ async def _run() -> None:
             if is_last or not use_pagination:
                 break
 
-            # récupère un sélecteur de pagination si présent dans l’une des collections
+            # Try to find and click the 'next' button
             pagination_selector = next(
                 (c.get("pagination_selector") for c in llm_map.values() if c.get("pagination_selector")), None
             )
+
+            # If click doesn't work, we stop
             if not await find_and_click_next(client, pagination_selector):
                 print("No 'next' found, stopping pagination.")
                 break
 
+        # Process scraped data
         all_clean, all_reports = {}, {}
+        # loop over collections
         for i, name in enumerate(cfg["collections_names"]):
             raw = all_raw.get(name, [])
             print(f"\nRun scraping loop for collection '{name}'")
@@ -79,6 +92,7 @@ async def _run() -> None:
             print(json.dumps(report, indent=2))
             all_reports[name] = report
 
+        # Build final output
         final = build_final_output(cfg, all_clean, all_reports)
         print(f"\nSaving output to {output_path}")
         save_output(output_path, final)
@@ -93,7 +107,7 @@ async def _run() -> None:
         except Exception as close_e:
             err_str = str(close_e).lower()
             if "event loop is closed" in err_str or "bad file descriptor" in err_str:
-                pass # Ignorer le bruit de fermeture
+                pass 
             else:
                 print("Error while closing the client:", close_e)
 
