@@ -129,7 +129,7 @@ Bash
 
 ```
 # Syntaxe :
-# uv run python agent/agent.py [chemin_serveur] [input.json] [output.json]
+uv run python agent/main.py src/webpilot/server/py agent/input.json output.json
 
 ```
 
